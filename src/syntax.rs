@@ -1,0 +1,172 @@
+//! Syntax and token kinds for the LeekScript grammar.
+//!
+//! Uses an enum with [`sipha::SyntaxKinds`] so discriminants are 0, 1, 2, … automatically.
+
+use sipha::types::FromSyntaxKind;
+use sipha::SyntaxKinds;
+
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, SyntaxKinds)]
+#[repr(u16)]
+pub enum Kind {
+    // Trivia (0–2)
+    TriviaWs,
+    TriviaLineComment,
+    TriviaBlockComment,
+    // Tokens: literals and identifiers (3–5)
+    TokNumber,
+    TokString,
+    TokIdent,
+    // Keywords (6–48)
+    KwAbstract,
+    KwAnd,
+    KwAs,
+    KwBreak,
+    KwClass,
+    KwConst,
+    KwContinue,
+    KwDo,
+    KwElse,
+    KwFalse,
+    KwFor,
+    KwFunction,
+    KwGlobal,
+    KwIf,
+    KwIn,
+    KwInclude,
+    KwLet,
+    KwNew,
+    KwNot,
+    KwNull,
+    KwOr,
+    KwReturn,
+    KwTrue,
+    KwVar,
+    KwWhile,
+    KwXor,
+    KwFinal,
+    KwConstructor,
+    KwExtends,
+    KwStatic,
+    KwPublic,
+    KwPrivate,
+    KwProtected,
+    KwThis,
+    KwSuper,
+    KwInstanceof,
+    KwTry,
+    KwCatch,
+    KwSwitch,
+    KwCase,
+    KwDefault,
+    KwThrow,
+    KwReserved,
+    // Tokens: operators and punctuation (49–63)
+    TokOp,
+    TokArrow,
+    TokDotDot,
+    TokDot,
+    TokColon,
+    TokComma,
+    TokSemi,
+    TokParenL,
+    TokParenR,
+    TokBracketL,
+    TokBracketR,
+    TokBraceL,
+    TokBraceR,
+    TokLemnisate,
+    TokPi,
+    // End of input (64)
+    TokEof,
+    // Nodes (65+)
+    NodeRoot,
+    NodeTokenStream,
+    NodeExpr,
+    NodePrimaryExpr,
+    NodeBinaryExpr,
+    NodeUnaryExpr,
+    NodeCallExpr,
+    NodeMemberExpr,
+    NodeIndexExpr,
+    NodeArray,
+    NodeMap,
+    NodeMapPair,
+    NodeObject,
+    NodeObjectPair,
+    NodeSet,
+    NodeStmt,
+    NodeBlock,
+    NodeVarDecl,
+    NodeIfStmt,
+    NodeWhileStmt,
+    NodeForStmt,
+    NodeForInStmt,
+    NodeDoWhileStmt,
+    NodeReturnStmt,
+    NodeBreakStmt,
+    NodeContinueStmt,
+    NodeExprStmt,
+    NodeFunctionDecl,
+    NodeClassDecl,
+    NodeInclude,
+    NodeConstructorDecl,
+    NodeInterval,
+    NodeClassField,
+    NodeAsCast,
+    NodeAnonFn,
+    NodeTypeAnnot,
+    NodeParam,
+    NodeTypeExpr,
+    NodeTypeParams,
+}
+
+/// sipha uses this kind for a wrapper root when the grammar produces a single root node.
+pub const SYNTHETIC_ROOT: sipha::types::SyntaxKind = u16::MAX;
+
+/// Human-readable name for a syntax kind (for diagnostics and debugging).
+pub fn kind_name(kind: sipha::types::SyntaxKind) -> &'static str {
+    if kind == SYNTHETIC_ROOT {
+        return "ROOT";
+    }
+    Kind::from_syntax_kind(kind).map(kind_name_enum).unwrap_or("?")
+}
+
+fn kind_name_enum(k: Kind) -> &'static str {
+    match k {
+        Kind::TokNumber => "NUMBER",
+        Kind::TokString => "STRING",
+        Kind::TokIdent => "IDENT",
+        Kind::TokOp => "OP",
+        Kind::TokParenL => "(",
+        Kind::TokParenR => ")",
+        Kind::TokDotDot => "..",
+        Kind::NodeTokenStream => "TOKEN_STREAM",
+        Kind::NodeRoot => "ROOT",
+        Kind::NodeExpr => "EXPR",
+        Kind::NodeExprStmt => "EXPR_STMT",
+        Kind::NodeVarDecl => "VAR_DECL",
+        Kind::NodeIfStmt => "IF_STMT",
+        Kind::NodeWhileStmt => "WHILE_STMT",
+        Kind::NodeBlock => "BLOCK",
+        Kind::NodeReturnStmt => "RETURN_STMT",
+        Kind::NodeForStmt => "FOR_STMT",
+        Kind::NodeForInStmt => "FOR_IN_STMT",
+        Kind::NodeDoWhileStmt => "DO_WHILE_STMT",
+        Kind::NodeFunctionDecl => "FUNCTION_DECL",
+        Kind::NodeClassDecl => "CLASS_DECL",
+        Kind::NodeConstructorDecl => "CONSTRUCTOR_DECL",
+        Kind::NodeClassField => "CLASS_FIELD",
+        Kind::NodeInterval => "INTERVAL",
+        Kind::NodeInclude => "INCLUDE",
+        Kind::NodeArray => "ARRAY",
+        Kind::NodeMap => "MAP",
+        Kind::NodeMapPair => "MAP_PAIR",
+        Kind::NodeObject => "OBJECT",
+        Kind::NodeObjectPair => "OBJECT_PAIR",
+        Kind::NodeSet => "SET",
+        Kind::NodeTypeExpr => "TYPE_EXPR",
+        Kind::NodeTypeParams => "TYPE_PARAMS",
+        Kind::NodeAsCast => "AS_CAST",
+        _ => "?",
+    }
+}
