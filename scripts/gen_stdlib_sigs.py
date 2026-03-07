@@ -34,7 +34,7 @@ FUNC_TYPE = {
 }
 
 CONST_TYPE = {
-    1: "real|integer",
+    1: "integer",
     2: "string",
     4: "Array",
     6: "integer",
