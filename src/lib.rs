@@ -20,6 +20,7 @@ pub mod analysis;
 pub mod formatter;
 pub mod grammar;
 pub mod parser;
+pub mod preprocess;
 pub mod syntax;
 pub mod tree_display;
 #[cfg(feature = "transform")]
@@ -27,8 +28,9 @@ pub mod transform;
 pub mod types;
 pub mod visitor;
 
-// Parsing
+// Parsing and include preprocessing
 pub use grammar::{build_grammar, build_signature_grammar};
+pub use preprocess::{expand_includes, IncludeError};
 pub use parser::{
     parse, parse_expression, parse_error_to_miette, parse_recovering, parse_signatures, parse_to_doc,
     parse_tokens, program_literals,

@@ -10,8 +10,8 @@ use sipha::red::SyntaxNode;
 
 use leekscript_rs::formatter::FormatterOptions;
 use leekscript_rs::{
-    analyze, analyze_with_signatures, format, parse, parse_error_to_miette, parse_signatures,
-    LineIndex,
+    analyze, analyze_with_signatures, expand_includes, format, parse, parse_error_to_miette,
+    parse_signatures, IncludeError, LineIndex,
 };
 
 /// Exit code for successful completion.
@@ -83,6 +83,7 @@ pub enum ParseOutcome {
     Empty,
     ParseError(ParseError, String),
     IoError(String),
+    IncludeError(IncludeError),
 }
 
 /// Read source from file or stdin.
@@ -96,10 +97,15 @@ pub fn read_input(file: Option<&Path>) -> Result<String, String> {
 }
 
 /// Read source and parse; centralises filename and miette error reporting.
+/// Expands `include(path)` relative to the input file (or cwd when reading from stdin).
 pub fn read_and_parse(input: Option<&Path>) -> ParseOutcome {
     let source = match read_input(input) {
         Ok(s) => s,
         Err(e) => return ParseOutcome::IoError(e),
+    };
+    let source = match expand_includes(&source, input) {
+        Ok(expanded) => expanded,
+        Err(e) => return ParseOutcome::IncludeError(e),
     };
     match parse(&source) {
         Ok(Some(root)) => ParseOutcome::Success(source, root),
@@ -147,6 +153,17 @@ fn handle_parse_failure(
                 );
             } else {
                 report_parse_error(&e, &source, filename_from_input(input));
+            }
+            EXIT_FAILURE
+        }
+        ParseOutcome::IncludeError(e) => {
+            if json {
+                println!(
+                    "{}",
+                    serde_json::json!({ "valid": false, "message": e.to_string() })
+                );
+            } else {
+                eprintln!("leekscript {command_label}: {e}");
             }
             EXIT_FAILURE
         }
@@ -210,6 +227,9 @@ pub fn run_format(args: &FormatArgs) -> i32 {
             false,
             "format",
         ),
+        ParseOutcome::IncludeError(e) => {
+            handle_parse_failure(ParseOutcome::IncludeError(e), input, false, "format")
+        }
         ParseOutcome::IoError(e) => {
             handle_parse_failure(ParseOutcome::IoError(e), input, false, "format")
         }
@@ -316,6 +336,12 @@ pub fn run_validate(args: &ValidateArgs) -> i32 {
         ParseOutcome::Empty => handle_parse_failure(ParseOutcome::Empty, input, args.json, "validate"),
         ParseOutcome::ParseError(e, source) => handle_parse_failure(
             ParseOutcome::ParseError(e, source),
+            input,
+            args.json,
+            "validate",
+        ),
+        ParseOutcome::IncludeError(e) => handle_parse_failure(
+            ParseOutcome::IncludeError(e),
             input,
             args.json,
             "validate",

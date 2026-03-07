@@ -193,8 +193,6 @@ pub fn analyze_with_signatures(
 mod tests {
     use super::*;
     use crate::parse;
-    use crate::parser::parse_signatures;
-    use std::path::Path;
 
     #[test]
     fn analyze_valid_program() {

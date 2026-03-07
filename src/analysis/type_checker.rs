@@ -17,6 +17,7 @@ use super::scope::{ScopeId, ScopeStore};
 pub struct TypeChecker<'a> {
     pub store: &'a ScopeStore,
     /// Root of the tree (for ancestor/sibling lookup).
+    #[allow(dead_code)]
     root: &'a SyntaxNode,
     stack: Vec<ScopeId>,
     next_scope_id: usize,

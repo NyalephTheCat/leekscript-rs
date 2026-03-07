@@ -95,11 +95,9 @@ pub fn var_decl_info(node: &SyntaxNode) -> Option<VarDeclInfo> {
 pub struct FunctionDeclInfo {
     pub name: String,
     pub name_span: Span,
-    /// Total number of parameters.
-    pub arity: usize,
     /// Minimum number of arguments (params without a default value).
     pub min_arity: usize,
-    /// Maximum number of arguments (same as arity; for overloads we store multiple ranges).
+    /// Maximum number of arguments (total params; for overloads we store multiple ranges).
     pub max_arity: usize,
 }
 
@@ -128,17 +126,16 @@ pub fn function_decl_info(node: &SyntaxNode) -> Option<FunctionDeclInfo> {
         .child_nodes()
         .filter(|n| n.kind_as::<Kind>() == Some(Kind::NodeParam))
         .collect();
-    let arity = params.len();
     let min_arity = params
         .iter()
         .take_while(|p| !param_has_default(p))
         .count();
+    let max_arity = params.len();
     Some(FunctionDeclInfo {
         name,
         name_span,
-        arity,
         min_arity,
-        max_arity: arity,
+        max_arity,
     })
 }
 
@@ -182,6 +179,7 @@ pub fn expr_identifier(node: &SyntaxNode) -> Option<(String, Span)> {
 }
 
 /// Check if this node is a simple identifier expression (for resolution).
+#[allow(dead_code)]
 pub fn is_identifier_expr(node: &SyntaxNode) -> bool {
     expr_identifier(node).is_some()
 }
