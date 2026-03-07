@@ -2,6 +2,11 @@
 name = "leekscript-rs"
 version = "0.1.0"
 edition = "2021"
+description = "LeekScript parser, formatter, and semantic analysis in Rust"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/leek-wars/leekscript-rs"
+keywords = ["leekscript", "parser", "language", "formatter", "lsp"]
+categories = ["parser-implementations", "development-tools"]
 
 [lints.rust]
 unsafe_code = "forbid"
@@ -16,14 +21,26 @@ path = "src/main.rs"
 
 [features]
 default = []
+# LSP conversions (to_lsp_diagnostic) and UTF-16 line/column. Enable for language servers.
+lsp = ["dep:tower-lsp", "utf16"]
+# AST transforms (e.g. expand += to + and =).
 transform = ["sipha/transform"]
+# UTF-16 offsets for LSP/editors. Required by the `lsp` feature.
 utf16 = ["sipha/utf16"]
 
 [dependencies]
+tower-lsp = { version = "0.20", optional = true }
 clap = { version = "4", features = ["derive"] }
 miette = { version = "7", features = ["fancy"] }
 serde_json = "1"
 sipha = { path = "../sipha/sipha", features = ["miette", "emit"] }
+sipha-analysis = { path = "../sipha/sipha-analysis" }
+toml = "0.8"
 
 [dev-dependencies]
+criterion = "0.5"
 sipha-diff = { path = "../sipha/sipha-diff" }
+
+[[bench]]
+name = "parse_analyze_format"
+harness = false

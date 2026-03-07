@@ -1,194 +1,27 @@
 //! Utilities to display the parser's syntax tree in a readable ASCII/Unicode tree format.
+//!
+//! Delegates to sipha's grammar-agnostic [`format_syntax_tree`](sipha::tree_display::format_syntax_tree)
+//! with a kind-name callback for LeekScript syntax kinds.
 
-use std::collections::HashSet;
-use std::sync::Arc;
-
-use sipha::red::{SyntaxElement, SyntaxNode, SyntaxToken};
+use sipha::red::SyntaxNode;
+use sipha::tree_display::format_syntax_tree as sipha_format_syntax_tree;
 
 use crate::syntax;
 
-/// Options for formatting the syntax tree.
-#[derive(Clone, Debug)]
-pub struct TreeDisplayOptions {
-    /// Include leaf tokens in the tree (otherwise only nodes are shown).
-    pub show_tokens: bool,
-    /// When showing tokens, include trivia (whitespace, comments).
-    pub show_trivia: bool,
-    /// Maximum length of token text to display; longer text is truncated with "...".
-    pub max_token_text_len: usize,
-    /// Indent string for each level (e.g. "  " or "│ ").
-    pub indent: String,
-}
-
-impl Default for TreeDisplayOptions {
-    fn default() -> Self {
-        Self {
-            show_tokens: true,
-            show_trivia: false,
-            max_token_text_len: 40,
-            indent: "  ".to_string(),
-        }
-    }
-}
-
-impl TreeDisplayOptions {
-    /// Structure-only: only syntax nodes, no tokens.
-    #[must_use] 
-    pub fn structure_only() -> Self {
-        Self {
-            show_tokens: false,
-            ..Self::default()
-        }
-    }
-
-    /// Full tree: nodes and all tokens including trivia.
-    #[must_use] 
-    pub fn full() -> Self {
-        Self {
-            show_trivia: true,
-            ..Self::default()
-        }
-    }
-}
-
-/// Identity for cycle detection: (green node pointer, offset).
-fn node_id(node: &SyntaxNode) -> (usize, u32) {
-    (
-        Arc::as_ptr(node.green()) as usize,
-        node.offset(),
-    )
-}
-
-/// Elements to show for a node (filtered by `show_trivia`), with `is_last` for tree connectors.
-fn visible_elements(
-    node: &SyntaxNode,
-    options: &TreeDisplayOptions,
-) -> Vec<(SyntaxElement, bool)> {
-    let elements: Vec<SyntaxElement> = node.children().collect();
-    let visible: Vec<_> = elements
-        .into_iter()
-        .filter(|e| {
-            !matches!(e, SyntaxElement::Token(t) if t.is_trivia() && !options.show_trivia)
-        })
-        .collect();
-    let n = visible.len();
-    visible
-        .into_iter()
-        .enumerate()
-        .map(|(i, e)| (e, i == n.saturating_sub(1)))
-        .collect()
-}
+/// Options for formatting the syntax tree (re-exported from sipha).
+pub use sipha::tree_display::TreeDisplayOptions;
 
 /// Format a syntax tree starting at `root` as a multi-line string.
 ///
-/// Detects cycles and prints `[cycle]` to avoid infinite recursion.
-#[must_use] 
+/// Uses LeekScript kind names for node and token labels.
+#[must_use]
 pub fn format_syntax_tree(root: &SyntaxNode, options: &TreeDisplayOptions) -> String {
-    let mut out = String::new();
-    let mut visited = HashSet::new();
-    format_node(root.clone(), options, "", true, &mut out, &mut visited);
-    out
+    sipha_format_syntax_tree(root, options, |k| syntax::kind_name(k).to_string())
 }
 
 /// Print the syntax tree to stdout.
 pub fn print_syntax_tree(root: &SyntaxNode, options: &TreeDisplayOptions) {
     println!("{}", format_syntax_tree(root, options));
-}
-
-fn format_node_header(
-    prefix: &str,
-    is_last: bool,
-    kind_str: &str,
-    out: &mut String,
-    cycle: bool,
-) {
-    let connector = if is_last { "└── " } else { "├── " };
-    out.push_str(prefix);
-    out.push_str(connector);
-    out.push_str(kind_str);
-    if cycle {
-        out.push_str(" [cycle]\n");
-    } else {
-        out.push('\n');
-    }
-}
-
-fn format_node(
-    node: SyntaxNode,
-    options: &TreeDisplayOptions,
-    prefix: &str,
-    is_last: bool,
-    out: &mut String,
-    visited: &mut HashSet<(usize, u32)>,
-) {
-    let id = node_id(&node);
-    let kind_str = syntax::kind_name(node.kind());
-    if !visited.insert(id) {
-        format_node_header(prefix, is_last, kind_str, out, true);
-        return;
-    }
-
-    format_node_header(prefix, is_last, kind_str, out, false);
-
-    let new_prefix = if is_last {
-        format!("{prefix}    ")
-    } else {
-        format!("{prefix}│   ")
-    };
-
-    format_node_children(node, options, &new_prefix, out, visited);
-    visited.remove(&id);
-}
-
-fn format_node_children(
-    node: SyntaxNode,
-    options: &TreeDisplayOptions,
-    new_prefix: &str,
-    out: &mut String,
-    visited: &mut HashSet<(usize, u32)>,
-) {
-    if options.show_tokens {
-        for (elem, is_last) in visible_elements(&node, options) {
-            match elem {
-                SyntaxElement::Node(n) => format_node(n, options, new_prefix, is_last, out, visited),
-                SyntaxElement::Token(t) => format_token(&t, options, new_prefix, is_last, out),
-            }
-        }
-    } else {
-        let child_nodes: Vec<SyntaxNode> = node.child_nodes().collect();
-        let last_idx = child_nodes.len().saturating_sub(1);
-        for (i, child) in child_nodes.into_iter().enumerate() {
-            format_node(child, options, new_prefix, i == last_idx, out, visited);
-        }
-    }
-}
-
-fn format_token(
-    token: &SyntaxToken,
-    options: &TreeDisplayOptions,
-    prefix: &str,
-    is_last: bool,
-    out: &mut String,
-) {
-    let kind_str = syntax::kind_name(token.kind());
-    let connector = if is_last { "└── " } else { "├── " };
-    out.push_str(prefix);
-    out.push_str(connector);
-    out.push_str(kind_str);
-    let text = token.text();
-    if !text.is_empty() {
-        let display = if text.len() > options.max_token_text_len {
-            format!("{:?}...", &text[..options.max_token_text_len])
-        } else {
-            format!("{text:?}")
-        };
-        out.push(' ');
-        out.push_str(&display);
-    }
-    if token.is_trivia() {
-        out.push_str(" (trivia)");
-    }
-    out.push('\n');
 }
 
 #[cfg(test)]

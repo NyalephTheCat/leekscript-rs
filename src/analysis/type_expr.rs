@@ -5,7 +5,7 @@
 //! `NodeTypeExpr` with the same shape: type_optional ( | type_optional )*.
 
 use sipha::red::{SyntaxElement, SyntaxNode};
-use sipha::types::Span;
+use sipha::types::{IntoSyntaxKind, Span};
 
 use crate::syntax::Kind;
 use crate::types::Type;
@@ -49,6 +49,27 @@ pub fn parse_type_expr(node: &SyntaxNode) -> TypeExprResult {
                 }
             }
         }
+    }
+
+    // When type_expr has nested structure (e.g. "integer getX()" or "Array<Cell> cells"), direct
+    // children may be intermediate rule nodes, so elements is empty. Use the node's first token
+    // as the type name and look for a descendant NodeTypeParams so we get e.g. Array<Cell> not Array<any>.
+    if elements.is_empty() {
+        if let Some(first_tok) = node.first_token() {
+            let name = first_tok.text().to_string();
+            let type_params = node
+                .find_all_nodes(Kind::NodeTypeParams.into_syntax_kind())
+                .into_iter()
+                .next();
+            let ty = parse_primary_type(name.as_str(), type_params.as_ref());
+            if let Ok(ty) = ty {
+                return TypeExprResult::Ok(ty);
+            }
+        }
+        return TypeExprResult::Err(
+            node.first_token()
+                .map_or_else(|| Span::new(0, 0), |t| t.text_range()),
+        );
     }
 
     // Split by |. Each segment is type_optional: type_primary + optional ?
@@ -128,7 +149,8 @@ fn parse_type_primary_segment(seg: &[TypeExprElement]) -> Result<Type, Span> {
         _ => return Err(first_span(first)),
     };
 
-    let type_params = seg.get(1).and_then(|el| {
+    // TypeParams may be at index 1 (sig grammar) or after Op("<") (program grammar: Ident, op_lt, TypeParams).
+    let type_params = seg.iter().find_map(|el| {
         if let TypeExprElement::TypeParams(n) = el {
             Some(n)
         } else {
@@ -297,6 +319,43 @@ pub fn find_type_expr_child(parent: &SyntaxNode) -> Option<SyntaxNode> {
         .find(|n| n.kind_as::<Kind>() == Some(Kind::NodeTypeExpr))
 }
 
+/// Extract parameter types and return type from a function-like node (program `NodeFunctionDecl`
+/// or signature `NodeSigFunction` / `NodeSigMethod`). Collects direct children with `param_kind`
+/// (e.g. `Kind::NodeParam` or `Kind::NodeSigParam`), parses each param's type, and uses the last
+/// direct child `NodeTypeExpr` as the return type.
+#[must_use]
+pub fn param_and_return_types(
+    node: &SyntaxNode,
+    param_kind: Kind,
+) -> (Option<Vec<Type>>, Option<Type>) {
+    let param_nodes: Vec<SyntaxNode> = node
+        .child_nodes()
+        .filter(|n| n.kind_as::<Kind>() == Some(param_kind))
+        .collect();
+    let mut param_types = Vec::with_capacity(param_nodes.len());
+    for p in &param_nodes {
+        if let Some(te) = find_type_expr_child(p) {
+            if let TypeExprResult::Ok(ty) = parse_type_expr(&te) {
+                param_types.push(ty);
+            } else {
+                return (None, None);
+            }
+        } else {
+            return (None, None);
+        }
+    }
+    let child_nodes: Vec<SyntaxNode> = node.child_nodes().collect();
+    let return_type_node = child_nodes
+        .iter()
+        .rev()
+        .find(|c| c.kind_as::<Kind>() == Some(Kind::NodeTypeExpr));
+    let return_type = return_type_node.and_then(|te| match parse_type_expr(te) {
+        TypeExprResult::Ok(t) => Some(t),
+        TypeExprResult::Err(_) => None,
+    });
+    (Some(param_types), return_type)
+}
+
 #[cfg(test)]
 mod tests {
     use super::*;
@@ -359,6 +418,79 @@ mod tests {
                 assert_eq!(*t, Type::compound2(Type::real(), Type::int()));
             }
             TypeExprResult::Err(_) => panic!("expected Ok(real|integer), got {:?}", param_type),
+        }
+    }
+
+    /// Find a NodeTypeExpr whose first token text is `name` (e.g. "Function").
+    fn find_type_expr_with_name(root: &SyntaxNode, name: &str) -> Option<SyntaxNode> {
+        for node in root.find_all_nodes(Kind::NodeTypeExpr.into_syntax_kind()) {
+            let first = node.first_token()?;
+            if first.text() == name {
+                return Some(node);
+            }
+        }
+        None
+    }
+
+    #[test]
+    fn parse_type_expr_function_two_args_from_program() {
+        use crate::parser::parse;
+
+        let source = "var f = null as Function<integer, integer => void>;";
+        let root = parse(source).unwrap().expect("parse");
+        let type_expr_node = find_type_expr_with_name(&root, "Function").expect("Function type node");
+        let result = parse_type_expr(&type_expr_node);
+        match &result {
+            TypeExprResult::Ok(ty) => {
+                if let Type::Function { args, return_type } = ty {
+                    assert_eq!(args.len(), 2, "expected 2 param types");
+                    assert_eq!(args[0], Type::int());
+                    assert_eq!(args[1], Type::int());
+                    assert_eq!(**return_type, Type::void());
+                } else {
+                    panic!("expected Type::Function, got {:?}", ty);
+                }
+            }
+            TypeExprResult::Err(_) => panic!("expected Ok(Function<...>), got {:?}", result),
+        }
+    }
+
+    #[test]
+    fn parse_type_expr_function_zero_params_from_sig() {
+        let source = "function noArg(Function< => boolean> pred) -> void\n";
+        let root = parse_signatures(source).unwrap().expect("parse");
+        let type_expr_node = find_type_expr_with_name(&root, "Function").expect("Function type node");
+        let result = parse_type_expr(&type_expr_node);
+        match &result {
+            TypeExprResult::Ok(ty) => {
+                if let Type::Function { args, return_type } = ty {
+                    assert!(args.is_empty(), "expected 0 param types");
+                    assert_eq!(**return_type, Type::bool());
+                } else {
+                    panic!("expected Type::Function, got {:?}", ty);
+                }
+            }
+            TypeExprResult::Err(_) => panic!("expected Ok(Function< => boolean>), got {:?}", result),
+        }
+    }
+
+    #[test]
+    fn parse_type_expr_function_one_param_from_sig() {
+        let source = "function oneArg(Function<integer => void> fn) -> void\n";
+        let root = parse_signatures(source).unwrap().expect("parse");
+        let type_expr_node = find_type_expr_with_name(&root, "Function").expect("Function type node");
+        let result = parse_type_expr(&type_expr_node);
+        match &result {
+            TypeExprResult::Ok(ty) => {
+                if let Type::Function { args, return_type } = ty {
+                    assert_eq!(args.len(), 1);
+                    assert_eq!(args[0], Type::int());
+                    assert_eq!(**return_type, Type::void());
+                } else {
+                    panic!("expected Type::Function, got {:?}", ty);
+                }
+            }
+            TypeExprResult::Err(_) => panic!("expected Ok(Function<integer => void>), got {:?}", result),
         }
     }
 }

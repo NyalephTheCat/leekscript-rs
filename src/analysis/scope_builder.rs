@@ -1,6 +1,7 @@
 //! Scope-building pass: walk the tree and build the scope chain with variables, functions, classes.
 
 use sipha::red::SyntaxNode;
+use sipha::types::IntoSyntaxKind;
 use sipha::walk::{Visitor, WalkResult};
 
 use crate::syntax::Kind;
@@ -8,42 +9,11 @@ use crate::syntax::Kind;
 use crate::types::Type;
 
 use super::node_helpers::{
-    class_decl_info, class_field_info, class_method_is_static, for_in_loop_vars, function_decl_info,
-    param_name, var_decl_info,
+    class_decl_info, class_field_info, class_member_visibility, class_method_is_static,
+    for_in_loop_vars, function_decl_info, param_name, var_decl_info,
 };
 use super::scope::{ScopeId, ScopeKind, ScopeStore, VariableInfo, VariableKind};
-use super::type_expr::{find_type_expr_child, parse_type_expr, TypeExprResult};
-
-/// Extract param types and return type from a NodeFunctionDecl (for top-level or method).
-fn function_decl_types(node: &SyntaxNode) -> (Option<Vec<Type>>, Option<Type>) {
-    let param_nodes: Vec<SyntaxNode> = node
-        .child_nodes()
-        .filter(|n| n.kind_as::<Kind>() == Some(Kind::NodeParam))
-        .collect();
-    let mut param_types = Vec::with_capacity(param_nodes.len());
-    for p in &param_nodes {
-        if let Some(te) = find_type_expr_child(p) {
-            if let TypeExprResult::Ok(ty) = parse_type_expr(&te) {
-                param_types.push(ty);
-            } else {
-                return (None, None);
-            }
-        } else {
-            return (None, None);
-        }
-    }
-    // Return type: last direct child NodeTypeExpr (after params, before block).
-    let child_nodes: Vec<SyntaxNode> = node.child_nodes().collect();
-    let return_type_node = child_nodes
-        .iter()
-        .rev()
-        .find(|c| c.kind_as::<Kind>() == Some(Kind::NodeTypeExpr));
-    let return_type = return_type_node.and_then(|te| match parse_type_expr(te) {
-        TypeExprResult::Ok(t) => Some(t),
-        TypeExprResult::Err(_) => None,
-    });
-    (Some(param_types), return_type)
-}
+use super::type_expr::{param_and_return_types, find_type_expr_child, parse_type_expr, TypeExprResult};
 
 /// Builds scope tree by walking the syntax tree; maintains a stack of scope IDs.
 /// Records the sequence of scope IDs pushed (in walk order) so Validator can use the same IDs.
@@ -122,6 +92,135 @@ impl Default for ScopeBuilder {
     }
 }
 
+/// True if `node` is at program top level (not inside Block, FunctionDecl, or ClassDecl).
+fn is_top_level(node: &SyntaxNode, root: &SyntaxNode) -> bool {
+    for anc in node.ancestors(root) {
+        match anc.kind_as::<Kind>() {
+            Some(Kind::NodeBlock) | Some(Kind::NodeFunctionDecl) | Some(Kind::NodeClassDecl) => {
+                return false;
+            }
+            _ => {}
+        }
+    }
+    true
+}
+
+/// Seed the root scope from a program AST (top-level classes, functions, globals only).
+/// Also registers class fields and methods so member access (e.g. `myCell.x`) infers types.
+/// Used when building scope from included files so the main file sees their declarations.
+pub fn seed_scope_from_program(store: &mut ScopeStore, root: &SyntaxNode) {
+    for kind in [
+        Kind::NodeClassDecl,
+        Kind::NodeFunctionDecl,
+        Kind::NodeVarDecl,
+    ] {
+        for node in root.find_all_nodes(kind.into_syntax_kind()) {
+            if !is_top_level(&node, root) {
+                continue;
+            }
+            match node.kind_as::<Kind>() {
+                Some(Kind::NodeClassDecl) => {
+                    if let Some(info) = class_decl_info(&node) {
+                        store.add_root_class(info.name.clone(), info.name_span);
+                    }
+                }
+                Some(Kind::NodeFunctionDecl) => {
+                    if let Some(info) = function_decl_info(&node) {
+                        let (param_types, return_type) = param_and_return_types(&node, Kind::NodeParam);
+                        if let (Some(pt), Some(rt)) = (param_types, return_type) {
+                            store.add_root_function_with_types(
+                                info.name.clone(),
+                                info.min_arity,
+                                info.max_arity,
+                                info.name_span,
+                                Some(pt),
+                                Some(rt),
+                            );
+                        } else {
+                            store.add_root_function(
+                                info.name.clone(),
+                                info.min_arity,
+                                info.max_arity,
+                                info.name_span,
+                            );
+                        }
+                    }
+                }
+                Some(Kind::NodeVarDecl) => {
+                    if let Some(info) = var_decl_info(&node) {
+                        if info.kind == super::node_helpers::VarDeclKind::Global {
+                            let declared_type = find_type_expr_child(&node)
+                                .and_then(|te| match parse_type_expr(&te) {
+                                    TypeExprResult::Ok(ty) => Some(ty),
+                                    TypeExprResult::Err(_) => None,
+                                });
+                            if let Some(ty) = declared_type {
+                                store.add_root_global_with_type(info.name.clone(), ty);
+                            } else {
+                                store.add_root_global(info.name.clone());
+                            }
+                        }
+                    }
+                }
+                _ => {}
+            }
+        }
+    }
+    seed_class_members_from_program(store, root);
+}
+
+/// Register class fields and methods from a program AST so that member access (obj.field, obj.method())
+/// infers types. Called after root-level decls are seeded; only processes top-level classes.
+fn seed_class_members_from_program(store: &mut ScopeStore, root: &SyntaxNode) {
+    let kind_class = Kind::NodeClassDecl.into_syntax_kind();
+    let class_decls: Vec<SyntaxNode> = root.find_all_nodes(kind_class);
+
+    for node in root.find_all_nodes(Kind::NodeClassField.into_syntax_kind()) {
+        let node_range = node.text_range();
+        let anc = class_decls.iter().find(|c| {
+            let r = c.text_range();
+            r.start <= node_range.start && node_range.end <= r.end
+        });
+        let class_name = match anc.and_then(|a| class_decl_info(a)) {
+            Some(info) => info.name,
+            None => continue,
+        };
+        if let Some((field_name, ty, is_static)) = class_field_info(&node) {
+            let ty = ty.unwrap_or(Type::any());
+            let vis = class_member_visibility(&node, root);
+            if is_static {
+                store.add_class_static_field(&class_name, field_name, ty, vis);
+            } else {
+                store.add_class_field(&class_name, field_name, ty, vis);
+            }
+        }
+    }
+
+    for node in root.find_all_nodes(Kind::NodeFunctionDecl.into_syntax_kind()) {
+        let node_range = node.text_range();
+        let anc = class_decls.iter().find(|c| {
+            let r = c.text_range();
+            r.start <= node_range.start && node_range.end <= r.end
+        });
+        let class_name = match anc.and_then(|a| class_decl_info(a)) {
+            Some(info) => info.name,
+            None => continue,
+        };
+        if let Some(info) = function_decl_info(&node) {
+            let (param_types, return_type) = param_and_return_types(&node, Kind::NodeParam);
+            let params = param_types.unwrap_or_default();
+            let ret = return_type.unwrap_or(Type::any());
+            let is_static = class_method_is_static(&node, root);
+            let vis = class_member_visibility(&node, root);
+            if is_static {
+                store.add_class_static_method(&class_name, info.name, params, ret, vis);
+            } else {
+                store.add_class_method(&class_name, info.name, params, ret, vis);
+            }
+        }
+    }
+}
+
 impl Visitor for ScopeBuilder {
     fn enter_node(&mut self, node: &SyntaxNode) -> WalkResult {
         if self.root.is_none() {
@@ -140,19 +239,28 @@ impl Visitor for ScopeBuilder {
                 if self.in_class_scope() {
                     if let Some(class_name) = self.class_stack.last().cloned() {
                         if let Some(info) = function_decl_info(node) {
-                            let (param_types, return_type) = function_decl_types(node);
+                            let (param_types, return_type) = param_and_return_types(node, Kind::NodeParam);
                             let params = param_types.unwrap_or_default();
-                            let ret = return_type.unwrap_or(Type::any());
+                            // A constructor returns an instance of the class when no return type is given.
+                            let ret = return_type.unwrap_or_else(|| {
+                                if info.name == class_name {
+                                    Type::instance(class_name.clone())
+                                } else {
+                                    Type::any()
+                                }
+                            });
                             let is_static = self
                                 .root
                                 .as_ref()
                                 .map_or(false, |root| class_method_is_static(node, root));
+                            let vis = class_member_visibility(node, self.root.as_ref().unwrap());
                             if is_static {
                                 self.store.add_class_static_method(
                                     &class_name,
                                     info.name,
                                     params,
                                     ret,
+                                    vis,
                                 );
                             } else {
                                 self.store.add_class_method(
@@ -160,6 +268,7 @@ impl Visitor for ScopeBuilder {
                                     info.name,
                                     params,
                                     ret,
+                                    vis,
                                 );
                             }
                         }
@@ -168,7 +277,7 @@ impl Visitor for ScopeBuilder {
                     // Only register in main scope for top-level functions, not class methods.
                     if let Some(info) = function_decl_info(node) {
                         if let Some(main_scope) = self.store.get_mut(self.main_scope()) {
-                            let (param_types, return_type) = function_decl_types(node);
+                            let (param_types, return_type) = param_and_return_types(node, Kind::NodeParam);
                             if param_types.is_some() || return_type.is_some() {
                                 main_scope.add_function_with_types(
                                     info.name.clone(),
@@ -200,14 +309,19 @@ impl Visitor for ScopeBuilder {
                 }
                 self.push(ScopeKind::Class);
             }
+            Kind::NodeConstructorDecl => {
+                // Push Function scope so constructor params are in scope for the body (like methods).
+                self.push(ScopeKind::Function);
+            }
             Kind::NodeClassField => {
                 if let Some(class_name) = self.class_stack.last() {
                     if let Some((field_name, ty, is_static)) = class_field_info(node) {
                         let ty = ty.unwrap_or(Type::any());
+                        let vis = class_member_visibility(node, self.root.as_ref().unwrap());
                         if is_static {
-                            self.store.add_class_static_field(class_name, field_name, ty);
+                            self.store.add_class_static_field(class_name, field_name, ty, vis);
                         } else {
-                            self.store.add_class_field(class_name, field_name, ty);
+                            self.store.add_class_field(class_name, field_name, ty, vis);
                         }
                     }
                 }
@@ -292,6 +406,7 @@ impl Visitor for ScopeBuilder {
             Kind::NodeBlock
             | Kind::NodeFunctionDecl
             | Kind::NodeClassDecl
+            | Kind::NodeConstructorDecl
             | Kind::NodeWhileStmt
             | Kind::NodeForStmt
             | Kind::NodeForInStmt

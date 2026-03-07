@@ -7,6 +7,11 @@ use sipha::walk::{Visitor, WalkResult};
 use std::collections::HashMap;
 
 /// Key for type map: (span.start, span.end) for exact span lookup.
+///
+/// When multiple nodes share the same span (e.g. an identifier that is both a primary expr and
+/// a var decl name), the type_map may store one entry per span; LSP/hover should prefer the
+/// innermost or declaration node as appropriate (e.g. use `node_at_offset` and look up the
+/// node's text range).
 pub type TypeMapKey = (u32, u32);
 
 use crate::syntax::Kind;
@@ -17,7 +22,8 @@ use super::error::{invalid_cast_at, type_mismatch_at, wrong_arity_at};
 use super::node_helpers::{
     call_argument_count, call_argument_node, class_decl_info, for_in_iterable_expr,
     for_in_loop_vars, is_ternary_expr, member_expr_member_name, node_index_in_parent,
-    null_check_from_condition, primary_expr_resolvable_name, var_decl_info,
+    null_check_from_condition, primary_expr_new_constructor, primary_expr_resolvable_name,
+    var_decl_info,
 };
 use super::scope::{ResolvedSymbol, ScopeId, ScopeStore};
 use super::type_expr::{find_type_expr_child, parse_type_expr, TypeExprResult};
@@ -45,6 +51,8 @@ pub struct TypeChecker<'a> {
     /// Map from expression span (start, end) to inferred type (for formatter type annotations).
     pub type_map: HashMap<TypeMapKey, Type>,
     /// Pending null-check narrowings: (var_name, then_ty, else_ty, closing_node). Popped when leaving if/ternary.
+    /// When we see `if (x != null)` (or `x == null`), we narrow the type of `x` in the then-branch (or else-branch)
+    /// to the non-null variant. Other patterns (e.g. `x == null` in else for then-branch narrowing) can be extended here.
     null_check_narrowing: Vec<(String, Type, Type, SyntaxNode)>,
 }
 
@@ -205,7 +213,7 @@ impl Visitor for TypeChecker<'_> {
             | Kind::NodeForStmt
             | Kind::NodeForInStmt
             | Kind::NodeDoWhileStmt => self.push_scope(),
-            Kind::NodeFunctionDecl | Kind::NodeClassDecl => {
+            Kind::NodeFunctionDecl | Kind::NodeClassDecl | Kind::NodeConstructorDecl => {
                 self.push_scope();
                 if kind == Kind::NodeFunctionDecl {
                     // Set return type only when it follows "->" (add_function_decl form). Class methods
@@ -245,6 +253,7 @@ impl Visitor for TypeChecker<'_> {
                         self.current_super_class = info.super_class;
                     }
                 }
+                // NodeConstructorDecl: only push_scope, no class/return type to set
             }
             _ => {}
         }
@@ -360,7 +369,7 @@ impl Visitor for TypeChecker<'_> {
                     self.null_check_narrowing.pop();
                 }
             }
-            Kind::NodeFunctionDecl | Kind::NodeClassDecl => {
+            Kind::NodeFunctionDecl | Kind::NodeClassDecl | Kind::NodeConstructorDecl => {
                 if kind == Kind::NodeFunctionDecl {
                     self.current_function_return_type = None;
                 } else if kind == Kind::NodeClassDecl {
@@ -370,7 +379,14 @@ impl Visitor for TypeChecker<'_> {
                 self.pop_scope();
             }
             Kind::NodePrimaryExpr => {
-                if let Some(name) = primary_expr_resolvable_name(node) {
+                if let Some((class_name, num_args)) = primary_expr_new_constructor(node) {
+                    for _ in 0..num_args {
+                        self.type_stack.pop();
+                    }
+                    let ty = Type::instance(class_name);
+                    self.type_stack.push(ty.clone());
+                    self.record_expression_type(node, &ty);
+                } else if let Some(name) = primary_expr_resolvable_name(node) {
                     self.last_primary_ident = Some(name.clone());
                     let ty = self.resolve_identifier_type(&name);
                     self.type_stack.push(ty.clone());
@@ -431,6 +447,9 @@ impl Visitor for TypeChecker<'_> {
                             }
                         }
                         return_type
+                    } else if let Some(Type::Class(Some(ref class_name))) = callee_ty.as_ref() {
+                        // Constructor call: ClassName(args) produces an instance of that class.
+                        Type::instance(class_name.clone())
                     } else {
                         Type::any()
                     }
@@ -490,9 +509,16 @@ impl Visitor for TypeChecker<'_> {
             }
             Kind::NodeIndexExpr => {
                 self.last_primary_ident = None;
-                let ty = Type::any();
-                self.type_stack.push(ty.clone());
-                self.record_expression_type(node, &ty);
+                // Stack: [..., receiver_ty, index_ty]. Infer element type from Array<T> or Map<K,V>.
+                let _index_ty = self.type_stack.pop().unwrap_or(Type::any());
+                let receiver_ty = self.type_stack.pop().unwrap_or(Type::any());
+                let element_ty = match &receiver_ty {
+                    Type::Array(elem) => *elem.clone(),
+                    Type::Map(_, val) => *val.clone(),
+                    _ => Type::any(),
+                };
+                self.type_stack.push(element_ty.clone());
+                self.record_expression_type(node, &element_ty);
             }
             Kind::NodeVarDecl => {
                 if let Some(info) = var_decl_info(node) {
@@ -519,6 +545,10 @@ impl Visitor for TypeChecker<'_> {
                     };
                     self.add_var_type(info.name.clone(), ty_to_store.clone());
                     self.record_expression_type(node, &ty_to_store);
+                    // Record type at variable name span so hover on identifier shows inferred type.
+                    let r = info.name_span;
+                    self.type_map
+                        .insert((r.start, r.end), ty_to_store);
                 }
             }
             Kind::NodeExpr => {
@@ -581,7 +611,10 @@ impl Visitor for TypeChecker<'_> {
                     let right = self.type_stack.pop().unwrap();
                     let left = self.type_stack.pop().unwrap();
                     let (result, err) = check_binary_op(&op, &left, &right);
-                    if let Some((span, msg)) = err {
+                    if let Some((_, msg)) = err {
+                        let span = node
+                            .first_token()
+                            .map_or_else(|| Span::new(0, 0), |t| t.text_range());
                         self.diagnostics.push(
                             SemanticDiagnostic::error(span, msg).with_code(super::error::AnalysisError::TypeMismatch.code()),
                         );
@@ -598,7 +631,10 @@ impl Visitor for TypeChecker<'_> {
                     .unwrap_or_default();
                 if let Some(operand) = self.type_stack.pop() {
                     let (result, err) = check_unary_op(&op, &operand);
-                    if let Some((span, msg)) = err {
+                    if let Some((_, msg)) = err {
+                        let span = node
+                            .first_token()
+                            .map_or_else(|| Span::new(0, 0), |t| t.text_range());
                         self.diagnostics.push(
                             SemanticDiagnostic::error(span, msg).with_code(super::error::AnalysisError::TypeMismatch.code()),
                         );

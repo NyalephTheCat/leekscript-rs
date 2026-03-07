@@ -2,6 +2,32 @@
 
 use crate::syntax::Kind;
 
+/// Sync rule for error recovery: matches `;`, `}`, or a statement-start keyword.
+/// Used by [`recover_until`] so that after a failed statement we skip until the next safe point.
+pub fn add_statement_sync(g: &mut sipha::builder::GrammarBuilder) {
+    g.parser_rule("statement_sync", |g: &mut sipha::builder::GrammarBuilder| {
+        g.skip();
+        g.choices(vec![
+            Box::new(|g| { g.call("semicolon"); }),
+            Box::new(|g| { g.call("rbrace"); }),
+            Box::new(|g| { g.token(Kind::KwVar, |g| { g.literal(b"var"); }); }),
+            Box::new(|g| { g.token(Kind::KwReturn, |g| { g.literal(b"return"); }); }),
+            Box::new(|g| { g.token(Kind::KwIf, |g| { g.literal(b"if"); }); }),
+            Box::new(|g| { g.token(Kind::KwWhile, |g| { g.literal(b"while"); }); }),
+            Box::new(|g| { g.token(Kind::KwFunction, |g| { g.literal(b"function"); }); }),
+            Box::new(|g| { g.token(Kind::KwClass, |g| { g.literal(b"class"); }); }),
+            Box::new(|g| { g.token(Kind::KwFor, |g| { g.literal(b"for"); }); }),
+            Box::new(|g| { g.token(Kind::KwDo, |g| { g.literal(b"do"); }); }),
+            Box::new(|g| { g.token(Kind::KwBreak, |g| { g.literal(b"break"); }); }),
+            Box::new(|g| { g.token(Kind::KwContinue, |g| { g.literal(b"continue"); }); }),
+            Box::new(|g| { g.token(Kind::KwGlobal, |g| { g.literal(b"global"); }); }),
+            Box::new(|g| { g.token(Kind::KwConst, |g| { g.literal(b"const"); }); }),
+            Box::new(|g| { g.token(Kind::KwLet, |g| { g.literal(b"let"); }); }),
+            Box::new(|g| { g.token(Kind::KwInclude, |g| { g.literal(b"include"); }); }),
+        ]);
+    });
+}
+
 pub fn add_block(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("block", |g: &mut sipha::builder::GrammarBuilder| {
         g.node(Kind::NodeBlock, |g| {
@@ -227,12 +253,17 @@ pub fn add_constructor_decl(g: &mut sipha::builder::GrammarBuilder) {
     });
 }
 
-/// Class method: return type at start — `public static integer a()` (no "function" keyword).
+/// Class method: optional return type at start — `public static integer a()` or `public update()` (no "function" keyword).
 pub fn add_class_method(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("class_method", |g: &mut sipha::builder::GrammarBuilder| {
         g.node(Kind::NodeFunctionDecl, |g| {
-            g.call("type_expr");
-            g.call("keyword_or_ident");
+            g.choices(vec![
+                Box::new(|g| {
+                    g.call("type_expr");
+                    g.call("keyword_or_ident");
+                }),
+                Box::new(|g| { g.call("keyword_or_ident"); }),
+            ]);
             g.call("lparen");
             g.optional(|g| {
                 g.call("param");
@@ -417,7 +448,9 @@ pub fn add_statement(g: &mut sipha::builder::GrammarBuilder) {
 pub fn add_program(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("program", |g: &mut sipha::builder::GrammarBuilder| {
         g.zero_or_more(|g| {
-            g.call("statement");
+            g.recover_until("statement_sync", |g| {
+                g.call("statement");
+            });
         });
     });
 }

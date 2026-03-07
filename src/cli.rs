@@ -8,10 +8,12 @@ use clap::{Parser, Subcommand};
 use sipha::engine::ParseError;
 use sipha::red::SyntaxNode;
 
-use leekscript_rs::formatter::{BraceStyle, FormatterOptions, IndentStyle, SemicolonStyle};
+use leekscript_rs::formatter::{
+    load_formatter_options_from_dir, BraceStyle, FormatterOptions, IndentStyle, SemicolonStyle,
+};
 use leekscript_rs::{
-    analyze, analyze_with_signatures, expand_includes, format, parse, parse_error_to_miette,
-    parse_signatures, IncludeError, LineIndex,
+    analyze, analyze_with_include_tree, analyze_with_signatures, build_include_tree, format, parse,
+    parse_error_to_miette, parse_signatures, IncludeError, LineIndex,
 };
 
 /// Exit code for successful completion.
@@ -115,7 +117,8 @@ pub struct ValidateArgs {
 
 /// Result of reading input and parsing (used by format and validate).
 pub enum ParseOutcome {
-    Success(String, SyntaxNode),
+    /// Source of the main file, its AST root, and optional include tree (when includes were resolved).
+    Success(String, SyntaxNode, Option<leekscript_rs::IncludeTree>),
     Empty,
     ParseError(ParseError, String),
     IoError(String),
@@ -132,21 +135,24 @@ pub fn read_input(file: Option<&Path>) -> Result<String, String> {
     Ok(s)
 }
 
-/// Read source and parse; centralises filename and miette error reporting.
-/// Expands `include(path)` relative to the input file (or cwd when reading from stdin).
+/// Read source, build include tree, and parse the main file (no source expansion).
 pub fn read_and_parse(input: Option<&Path>) -> ParseOutcome {
     let source = match read_input(input) {
         Ok(s) => s,
         Err(e) => return ParseOutcome::IoError(e),
     };
-    let source = match expand_includes(&source, input) {
-        Ok(expanded) => expanded,
+    let path_ref = input.map(|p| p.as_ref());
+    let tree = match build_include_tree(&source, path_ref) {
+        Ok(t) => t,
         Err(e) => return ParseOutcome::IncludeError(e),
     };
-    match parse(&source) {
-        Ok(Some(root)) => ParseOutcome::Success(source, root),
-        Ok(None) => ParseOutcome::Empty,
-        Err(e) => ParseOutcome::ParseError(e, source),
+    match &tree.root {
+        Some(root) => ParseOutcome::Success(tree.source.clone(), root.clone(), Some(tree)),
+        None => match parse(&tree.source) {
+            Ok(Some(root)) => ParseOutcome::Success(tree.source, root, None),
+            Ok(None) => ParseOutcome::Empty,
+            Err(e) => ParseOutcome::ParseError(e, tree.source),
+        },
     }
 }
 
@@ -172,7 +178,7 @@ fn handle_parse_failure(
     command_label: &str,
 ) -> i32 {
     match outcome {
-        ParseOutcome::Success(_, _) => unreachable!("handle_parse_failure only for failures"),
+        ParseOutcome::Success(_, _, _) => unreachable!("handle_parse_failure only for failures"),
         ParseOutcome::Empty => {
             if json {
                 println!("{}", serde_json::json!({ "valid": false, "message": "empty parse" }));
@@ -219,7 +225,7 @@ pub fn run_format(args: &FormatArgs) -> i32 {
     let outcome = read_and_parse(input);
 
     match outcome {
-        ParseOutcome::Success(source, root) => {
+        ParseOutcome::Success(source, root, _) => {
             let options = formatter_options_from_args(args);
             let formatted = format(&root, &options);
 
@@ -333,7 +339,7 @@ fn default_signature_roots() -> Vec<sipha::red::SyntaxNode> {
 pub fn run_validate(args: &ValidateArgs) -> i32 {
     let input = args.input.as_deref();
     match read_and_parse(input) {
-        ParseOutcome::Success(source, root) => {
+        ParseOutcome::Success(source, root, tree_opt) => {
             let mut signature_roots = Vec::new();
             if let Some(ref dir) = args.stdlib_dir {
                 signature_roots.extend(load_signatures_from_dir(dir));
@@ -347,7 +353,9 @@ pub fn run_validate(args: &ValidateArgs) -> i32 {
             {
                 signature_roots = default_signature_roots();
             }
-            let result = if signature_roots.is_empty() {
+            let result = if let Some(ref tree) = tree_opt {
+                analyze_with_include_tree(tree, &signature_roots)
+            } else if signature_roots.is_empty() {
                 analyze(&root)
             } else {
                 analyze_with_signatures(&root, &signature_roots)
@@ -415,6 +423,14 @@ pub fn run_validate(args: &ValidateArgs) -> i32 {
 }
 
 fn formatter_options_from_args(args: &FormatArgs) -> FormatterOptions {
+    // Base from config file when formatting a file (CLI args override).
+    let base = args
+        .input
+        .as_ref()
+        .and_then(|p| p.parent())
+        .and_then(load_formatter_options_from_dir)
+        .unwrap_or_default();
+
     let signature_roots = if args.annotate_types {
         let mut roots = Vec::new();
         if let Some(ref dir) = args.stdlib_dir {
@@ -439,7 +455,7 @@ fn formatter_options_from_args(args: &FormatArgs) -> FormatterOptions {
     };
 
     let indent_style = if args.indent.eq_ignore_ascii_case("tabs") {
-        IndentStyle::Tabs
+        base.indent_style
     } else if args.indent.eq_ignore_ascii_case("spaces") {
         IndentStyle::Spaces(4)
     } else {
@@ -449,20 +465,20 @@ fn formatter_options_from_args(args: &FormatArgs) -> FormatterOptions {
             let n = suffix.parse().unwrap_or(4);
             IndentStyle::Spaces(n)
         } else {
-            IndentStyle::Tabs
+            base.indent_style
         }
     };
 
     let brace_style = if args.brace_style.eq_ignore_ascii_case("next-line") {
         BraceStyle::NextLine
     } else {
-        BraceStyle::SameLine
+        base.brace_style
     };
 
     let semicolon_style = if args.semicolon_style.eq_ignore_ascii_case("omit") {
         SemicolonStyle::Omit
     } else {
-        SemicolonStyle::Always
+        base.semicolon_style
     };
 
     FormatterOptions {

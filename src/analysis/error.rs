@@ -1,6 +1,23 @@
 //! Semantic error codes and helpers for analysis diagnostics.
 //!
 //! Aligned with leekscript-java's `leekscript.common.Error` where applicable.
+//!
+//! ## Mapping to LeekScript Java compiler (Error enum)
+//!
+//! | AnalysisError variant              | Java constant                     | Code |
+//! |------------------------------------|-----------------------------------|------|
+//! | `BreakOutOfLoop`                   | `BREAK_OUT_OF_LOOP`              | E012 |
+//! | `ContinueOutOfLoop`                | `CONTINUE_OUT_OF_LOOP`           | E013 |
+//! | `IncludeOnlyInMainBlock`           | `INCLUDE_ONLY_IN_MAIN_BLOCK`     | E014 |
+//! | `FunctionOnlyInMainBlock`         | `FUNCTION_ONLY_IN_MAIN_BLOCK`    | E019 |
+//! | `VariableNameUnavailable`         | `VARIABLE_NAME_UNAVAILABLE`      | E021 |
+//! | `GlobalOnlyInMainBlock`            | `GLOBAL_ONLY_IN_MAIN_BLOCK`      | E027 |
+//! | `UnknownVariableOrFunction`        | `UNKNOWN_VARIABLE_OR_FUNCTION`   | E033 |
+//! | `DuplicateClassName`              | duplicate class                  | E034 |
+//! | `DuplicateFunctionName`           | duplicate function               | E035 |
+//! | `WrongArity`                       | wrong argument count             | E036 |
+//! | `TypeMismatch`                     | type mismatch / invalid cast     | E037 |
+//! | `OptionalParamsOnlyInStandard...` | optional params in user function | E038 |
 
 use sipha::error::SemanticDiagnostic;
 use sipha::types::Span;

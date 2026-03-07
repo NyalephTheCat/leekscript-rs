@@ -8,6 +8,7 @@ use std::fmt;
 /// Primitive and built-in types matching leekscript-java's Type constants.
 #[derive(Clone, Debug, PartialEq, Eq, Hash)]
 pub enum Type {
+    // ─── Special / meta ─────────────────────────────────────────────────────
     /// Error type (invalid type)
     Error,
     /// Warning type (e.g. unknown member on any)
@@ -16,6 +17,8 @@ pub enum Type {
     Void,
     /// `any` – top type
     Any,
+
+    // ─── Primitives ─────────────────────────────────────────────────────────
     /// `null`
     Null,
     /// `boolean`
@@ -28,10 +31,14 @@ pub enum Type {
     String,
     /// `Object`
     Object,
+
+    // ─── Class / instance ───────────────────────────────────────────────────
     /// `Class` or `Class<ClassName>` (the class/metatype value)
     Class(Option<String>),
     /// Instance of a class (e.g. `this` inside a class; type of a variable declared as that class).
     Instance(String),
+
+    // ─── Generic containers ─────────────────────────────────────────────────
     /// `Array` or `Array<T>`
     Array(Box<Type>),
     /// `Map` or `Map<K, V>`
@@ -40,6 +47,8 @@ pub enum Type {
     Set(Box<Type>),
     /// `Interval` or `Interval<T>`
     Interval(Box<Type>),
+
+    // ─── Callable / union ───────────────────────────────────────────────────
     /// Function type: `Function<T1, T2, ... => R>` (0 args: `Function< => R>`)
     Function {
         args: Vec<Type>,
@@ -49,86 +58,87 @@ pub enum Type {
     Compound(Vec<Type>),
 }
 
+// ─── Constructors ───────────────────────────────────────────────────────────
 impl Type {
     /// Predefined type constants matching leekscript-java.
-    #[must_use] 
+    #[must_use]
     pub const fn error() -> Self {
         Type::Error
     }
-    #[must_use] 
+    #[must_use]
     pub const fn warning() -> Self {
         Type::Warning
     }
-    #[must_use] 
+    #[must_use]
     pub const fn void() -> Self {
         Type::Void
     }
-    #[must_use] 
+    #[must_use]
     pub const fn any() -> Self {
         Type::Any
     }
-    #[must_use] 
+    #[must_use]
     pub const fn null() -> Self {
         Type::Null
     }
-    #[must_use] 
+    #[must_use]
     pub const fn bool() -> Self {
         Type::Bool
     }
-    #[must_use] 
+    #[must_use]
     pub const fn int() -> Self {
         Type::Int
     }
-    #[must_use] 
+    #[must_use]
     pub const fn real() -> Self {
         Type::Real
     }
-    #[must_use] 
+    #[must_use]
     pub const fn string() -> Self {
         Type::String
     }
-    #[must_use] 
+    #[must_use]
     pub const fn object() -> Self {
         Type::Object
     }
-    #[must_use] 
+    #[must_use]
     pub fn class(name: Option<String>) -> Self {
         Type::Class(name)
     }
-    #[must_use] 
+    #[must_use]
     pub fn instance(class_name: impl Into<String>) -> Self {
         Type::Instance(class_name.into())
     }
-    #[must_use] 
+    #[must_use]
     pub fn array(element: Type) -> Self {
         Type::Array(Box::new(element))
     }
-    #[must_use] 
+    #[must_use]
     pub fn map(key: Type, value: Type) -> Self {
         Type::Map(Box::new(key), Box::new(value))
     }
-    #[must_use] 
+    #[must_use]
     pub fn set(element: Type) -> Self {
         Type::Set(Box::new(element))
     }
-    #[must_use] 
+    #[must_use]
     pub fn interval(element: Type) -> Self {
         Type::Interval(Box::new(element))
     }
-    #[must_use] 
+    #[must_use]
     pub fn function(args: Vec<Type>, return_type: Type) -> Self {
         Type::Function {
             args,
             return_type: Box::new(return_type),
         }
     }
-    #[must_use] 
+    #[must_use]
     pub fn compound(types: Vec<Type>) -> Self {
         Type::Compound(types)
     }
 
     /// Build compound from two types (e.g. T1 | T2).
-    #[must_use] 
+    #[must_use]
     pub fn compound2(a: Type, b: Type) -> Self {
         Type::Compound(vec![a, b])
     }
@@ -150,51 +160,83 @@ impl Type {
             _ => ty.clone(),
         }
     }
+}
 
+// ─── Queries / predicates ───────────────────────────────────────────────────
+impl Type {
     /// Name/code as in source (`getCode()` in Java). Uses Display for full representation.
-    #[must_use] 
+    #[must_use]
     pub fn code(&self) -> String {
         self.to_string()
     }
 
-    /// Format for type annotations (e.g. comments). Uses `type?` instead of `type | null`.
+    /// Format for type annotations (e.g. hover, completion). Uses `type?` instead of
+    /// `type | null` at every level, so e.g. `Array<Cell | null>` shows as `Array<Cell?>`.
     #[must_use]
     pub fn for_annotation(&self) -> String {
-        if let Type::Compound(types) = self {
-            if types.len() == 2 && types.iter().any(|t| matches!(t, Type::Null)) {
-                if let Some(t) = types.iter().find(|t| !matches!(t, Type::Null)) {
-                    return format!("{}?", t);
-                }
-            }
-        }
-        self.to_string()
+        format_type_for_annotation(self)
     }
 
-    #[must_use] 
+    #[must_use]
     pub fn is_primitive_number(&self) -> bool {
         matches!(self, Type::Int | Type::Real)
     }
-    #[must_use] 
+    #[must_use]
     pub fn is_number(&self) -> bool {
         matches!(self, Type::Int | Type::Real)
     }
-    #[must_use] 
+    #[must_use]
     pub fn is_array(&self) -> bool {
         matches!(self, Type::Array(_))
     }
-    #[must_use] 
+    #[must_use]
     pub fn is_map(&self) -> bool {
         matches!(self, Type::Map(_, _))
     }
-    #[must_use] 
+    #[must_use]
     pub fn can_be_null(&self) -> bool {
         matches!(self, Type::Any | Type::Null)
     }
-    #[must_use] 
+    #[must_use]
     pub fn is_primitive(&self) -> bool {
         matches!(self, Type::Int | Type::Bool | Type::Real)
     }
+}
 
+/// Recursively format a type for annotations (hover, completion): use `T?` for `T | null` at every level.
+fn format_type_for_annotation(ty: &Type) -> String {
+    match ty {
+        Type::Compound(types) if types.len() == 2 && types.iter().any(|t| matches!(t, Type::Null)) => {
+            if let Some(t) = types.iter().find(|t| !matches!(t, Type::Null)) {
+                return format!("{}?", format_type_for_annotation(t));
+            }
+        }
+        Type::Array(inner) => return format!("Array<{}>", format_type_for_annotation(inner)),
+        Type::Map(k, v) => {
+            return format!(
+                "Map<{}, {}>",
+                format_type_for_annotation(k),
+                format_type_for_annotation(v)
+            );
+        }
+        Type::Set(inner) => return format!("Set<{}>", format_type_for_annotation(inner)),
+        Type::Interval(inner) => return format!("Interval<{}>", format_type_for_annotation(inner)),
+        Type::Function { args, return_type } => {
+            let args_str: Vec<String> = args.iter().map(format_type_for_annotation).collect();
+            let ret_str = format_type_for_annotation(return_type);
+            return format!("Function<{} => {}>", args_str.join(", "), ret_str);
+        }
+        Type::Compound(types) => {
+            let parts: Vec<String> = types.iter().map(format_type_for_annotation).collect();
+            return parts.join(" | ");
+        }
+        _ => {}
+    }
+    ty.to_string()
+}
+
+// ─── Subtyping / cast ───────────────────────────────────────────────────────
+impl Type {
     /// Whether a value of type `other` can be assigned to a variable of type `self` (self = target, other = source).
     #[must_use]
     pub fn assignable_from(&self, other: &Type) -> bool {
@@ -212,7 +254,7 @@ impl Type {
         match self {
             Type::Any => true,
             Type::Error | Type::Warning => false,
-            Type::Real => other.is_number(), // int and real assignable to real
+            Type::Real => matches!(other, Type::Real), // only real assignable to real; integer cannot be assigned to real
             Type::Compound(types) => types.iter().any(|t| t.assignable_from(other)),
             _ => {
                 if matches!(other, Type::Null) {
@@ -271,6 +313,7 @@ impl Type {
     }
 }
 
+// ─── Display ─────────────────────────────────────────────────────────────────
 impl fmt::Display for Type {
     fn fmt(&self, f: &mut fmt::Formatter<'_>) -> fmt::Result {
         match self {
@@ -341,8 +384,17 @@ mod tests {
 
     #[test]
     fn assignable_numeric() {
-        assert!(Type::real().assignable_from(&Type::int()));
-        assert!(!Type::int().assignable_from(&Type::real()));
+        // Integer and real are not assignable to each other (strict numeric types).
+        assert!(
+            !Type::int().assignable_from(&Type::real()),
+            "real expression must not be assignable to integer variable"
+        );
+        assert!(
+            !Type::real().assignable_from(&Type::int()),
+            "integer expression must not be assignable to real variable"
+        );
+        assert!(Type::int().assignable_from(&Type::int()));
+        assert!(Type::real().assignable_from(&Type::real()));
     }
 
     #[test]
@@ -395,5 +447,30 @@ mod tests {
             Type::compound2(Type::real(), Type::int()).for_annotation(),
             "real | integer"
         );
+    }
+
+    #[test]
+    fn for_annotation_composite_types() {
+        // Array of optional Cell
+        let arr_cell_opt = Type::array(Type::compound2(Type::instance("Cell"), Type::null()));
+        assert_eq!(arr_cell_opt.for_annotation(), "Array<Cell?>");
+
+        // Map with optional value
+        let map_opt_val = Type::map(
+            Type::string(),
+            Type::compound2(Type::instance("Entity"), Type::null()),
+        );
+        assert_eq!(map_opt_val.for_annotation(), "Map<string, Entity?>");
+
+        // Optional array
+        let opt_arr = Type::compound2(Type::array(Type::int()), Type::null());
+        assert_eq!(opt_arr.for_annotation(), "Array<integer>?");
+
+        // Function with optional return
+        let fn_opt_ret = Type::function(
+            vec![Type::int()],
+            Type::compound2(Type::instance("Cell"), Type::null()),
+        );
+        assert_eq!(fn_opt_ret.for_annotation(), "Function<integer => Cell?>");
     }
 }

@@ -2,12 +2,13 @@
 
 use std::sync::OnceLock;
 
-use sipha::engine::{Engine, ParseError, ParseOutput};
+use sipha::engine::{Engine, ParseError, ParseOutput, RecoverMultiResult};
 pub use sipha::incremental::TextEdit;
 use sipha::incremental::reparse as sipha_reparse;
 use sipha::insn::ParseGraph;
 use sipha::parsed_doc::ParsedDoc;
 use sipha::red::SyntaxNode;
+use sipha::types::Span;
 
 use crate::grammar::{
     build_expression_grammar, build_grammar, build_program_grammar, build_signature_grammar,
@@ -118,6 +119,22 @@ pub fn parse_recovering(source: &str) -> Result<ParseOutput, (ParseOutput, Parse
     engine.parse_recovering(graph, source.as_bytes())
 }
 
+/// Parse in multi-error recovery mode: on statement failures, skip to the next sync point
+/// (e.g. `;`, `}`, or statement-start keyword) and continue, collecting up to `max_errors` errors.
+///
+/// Requires the program grammar to use [`recover_until`](sipha::builder::GrammarBuilder::recover_until)
+/// (used for `program` and `block`). Returns `Ok(output)` on full success; `Err(RecoverMultiResult { partial, errors })`
+/// when at least one parse error was collected. Use the partial output's syntax root for a best-effort
+/// tree and convert each error to diagnostics for IDE or batch reporting.
+pub fn parse_recovering_multi(
+    source: &str,
+    max_errors: usize,
+) -> Result<ParseOutput, RecoverMultiResult> {
+    let (_, graph) = program_built_and_graph();
+    let mut engine = Engine::new().with_memo();
+    engine.parse_recovering_multi(graph, source.as_bytes(), max_errors)
+}
+
 /// Literal table for the program grammar (used for parsing full programs).
 ///
 /// Use with [`parse_error_to_miette`] so that "expected literal#n" in diagnostics
@@ -162,6 +179,41 @@ pub fn program_expected_labels() -> &'static [&'static str] {
     program_built_and_graph().1.expected_labels
 }
 
+/// Convert a parse error into semantic diagnostics for LSP or other tooling.
+///
+/// Returns a single-element vec for [`ParseError::NoMatch`] (with message from
+/// the program grammar's literals/rule names) or [`ParseError::BadGraph`].
+/// Use when the main program failed to parse so that diagnostics include the
+/// parse error without duplicating conversion logic in the LSP.
+#[must_use]
+pub fn parse_error_to_diagnostics(parse_err: &ParseError, source: &str) -> Vec<sipha::error::SemanticDiagnostic> {
+    let source_bytes = source.as_bytes();
+    let line_index = sipha::line_index::LineIndex::new(source_bytes);
+    let (span, message) = match parse_err {
+        ParseError::NoMatch(diag) => {
+            let message = diag.format_with_source(
+                source_bytes,
+                &line_index,
+                Some(program_literals()),
+                Some(program_rule_names()),
+                Some(program_expected_labels()),
+            );
+            (Span::new(diag.furthest, diag.furthest), message)
+        }
+        ParseError::BadGraph => (
+            Span::new(0, 0),
+            "malformed parse graph".to_string(),
+        ),
+    };
+    vec![sipha::error::SemanticDiagnostic {
+        span,
+        message,
+        severity: sipha::error::Severity::Error,
+        code: Some("parse_error".to_string()),
+        file_id: None,
+    }]
+}
+
 /// Convert a parse error into a [`miette::Report`] with source snippet and resolved literals.
 ///
 /// Uses the **program** grammar's literal and rule-name tables so that expected
@@ -189,6 +241,7 @@ pub fn parse_error_to_miette(
 #[cfg(test)]
 mod tests {
     use sipha::red::SyntaxElement;
+    use sipha::types::IntoSyntaxKind;
 
     use crate::syntax::Kind;
 
@@ -205,6 +258,75 @@ mod tests {
     fn parse_tokens_invalid() {
         let result = parse_tokens("'unterminated string");
         assert!(result.is_err(), "unterminated string should fail");
+    }
+
+    // ─── Parser edge cases: malformed or ambiguous inputs ────────────────────
+
+    #[test]
+    fn parse_edge_unterminated_double_quote_string() {
+        let result = parse(r#"return "hello"#);
+        assert!(result.is_err(), "unterminated double-quote string should fail");
+    }
+
+    #[test]
+    fn parse_edge_unterminated_single_quote_string() {
+        let result = parse("return 'x");
+        assert!(result.is_err(), "unterminated single-quote string should fail");
+    }
+
+    #[test]
+    fn parse_edge_empty_input() {
+        let result = parse("");
+        assert!(result.is_ok(), "empty input should not panic");
+        // Empty input may return None or Some(empty root) depending on grammar.
+        let _ = result.unwrap();
+    }
+
+    #[test]
+    fn parse_edge_only_whitespace() {
+        let result = parse("   \n\t  ");
+        assert!(result.is_ok());
+    }
+
+    #[test]
+    fn parse_edge_incomplete_binary_op() {
+        let result = parse("return 1 + ");
+        assert!(result.is_err(), "incomplete expression after + should fail");
+    }
+
+    #[test]
+    fn parse_edge_unclosed_paren() {
+        let result = parse("return (1 + 2");
+        assert!(result.is_err(), "unclosed parenthesis should fail");
+    }
+
+    #[test]
+    fn parse_edge_unclosed_brace() {
+        let result = parse("function f() { return 1;");
+        // Parser may fail or recover; we only check it doesn't panic.
+        let _ = result;
+    }
+
+    #[test]
+    fn parse_edge_odd_operator_sequence() {
+        let result = parse("return 1 * * 2;");
+        // Grammar may reject or accept; we lock in that we don't panic.
+        let _ = result;
+    }
+
+    #[test]
+    fn parse_edge_recovery_produces_partial_tree() {
+        use super::parse_recovering_multi;
+        let source = "var x = 1; return ( ; var y = 2;";
+        let out = parse_recovering_multi(source, 5);
+        // Recovery returns Ok(ParseOutput) when parse succeeds, or Err with .partial and .errors.
+        // When Err, partial result should still yield a syntax root for downstream use.
+        if let Err(err) = &out {
+            assert!(
+                err.partial.syntax_root(source.as_bytes()).is_some(),
+                "recovery Err should yield partial syntax root"
+            );
+        }
     }
 
     #[test]
@@ -243,6 +365,39 @@ mod tests {
         // Unclosed brace or invalid token sequence should fail.
         let result = parse("return (");
         assert!(result.is_err(), "invalid program should return parse error");
+    }
+
+    #[test]
+    fn parse_recovering_multi_collects_multiple_errors() {
+        use super::parse_recovering_multi;
+
+        // Two invalid statements: "return (" and "var x = " — recovery skips to next sync point.
+        let source = "return ( ; var x = ";
+        let result = parse_recovering_multi(source, 10);
+        let err = result.expect_err("recovery should return Err with collected errors");
+        assert!(
+            err.errors.len() >= 2,
+            "expected at least 2 parse errors, got {}",
+            err.errors.len()
+        );
+    }
+
+    #[test]
+    fn parse_error_to_miette_produces_report() {
+        use super::parse_error_to_miette;
+
+        let source = "return (";
+        let err = parse(source).unwrap_err();
+        let filename = "test.leek";
+        let report = parse_error_to_miette(&err, source, filename);
+        assert!(report.is_some(), "NoMatch parse error should produce a miette report");
+        let report = report.unwrap();
+        let report_str = format!("{report:?}");
+        assert!(
+            report_str.contains("expected") || report_str.contains("test.leek"),
+            "report should contain expected tokens or filename: {:?}",
+            report_str
+        );
     }
 
     #[test]
@@ -286,5 +441,77 @@ mod tests {
             .expect("should have binary expr");
         let rhs = binary_expr_rhs(&binary).expect("rhs field on mul-level binary");
         assert_eq!(rhs.collect_text().trim(), "4", "named field rhs should be right operand");
+    }
+
+    // ─── Function declaration forms (plan: ensure all shapes parse) ───────────
+
+    fn assert_parse_function_decl(source: &str, test_name: &str) {
+        let root = parse(source).unwrap().expect(test_name);
+        let funcs = root.find_all_nodes(Kind::NodeFunctionDecl.into_syntax_kind());
+        assert!(!funcs.is_empty(), "{}: expected at least one NodeFunctionDecl in {:?}", test_name, source);
+    }
+
+    #[test]
+    fn parse_function_untyped_params_no_return() {
+        assert_parse_function_decl("function a(b, c) {}", "untyped params, no return");
+    }
+
+    #[test]
+    fn parse_function_untyped_params_arrow_return() {
+        assert_parse_function_decl("function a(b, c) -> void {}", "untyped params, -> void");
+    }
+
+    #[test]
+    fn parse_function_untyped_params_fat_arrow_return() {
+        assert_parse_function_decl("function a(b, c) => void {}", "untyped params, => void");
+    }
+
+    #[test]
+    fn parse_function_mixed_params_fat_arrow_return() {
+        assert_parse_function_decl("function a(integer b, c) => void {}", "mixed params, => void");
+    }
+
+    #[test]
+    fn parse_function_no_params() {
+        assert_parse_function_decl("function a() {}", "no params");
+    }
+
+    #[test]
+    fn parse_function_typed_params_arrow_return() {
+        assert_parse_function_decl("function a(integer x, integer y) -> integer {}", "typed params, -> integer");
+    }
+
+    // ─── Function type in type position (Function<...>) ────────────────────────
+
+    #[test]
+    fn parse_program_with_function_type_two_args_return() {
+        let source = "var f = null as Function<integer, integer => void>;";
+        let root = parse(source).unwrap().expect("Function<integer, integer => void>");
+        let type_exprs = root.find_all_nodes(Kind::NodeTypeExpr.into_syntax_kind());
+        assert!(!type_exprs.is_empty(), "expected NodeTypeExpr for Function<...> type");
+    }
+
+    #[test]
+    fn parse_program_with_function_type_zero_params() {
+        let source = "var f = null as Function< => void>;";
+        let root = parse(source).unwrap().expect("Function< => void>");
+        let type_exprs = root.find_all_nodes(Kind::NodeTypeExpr.into_syntax_kind());
+        assert!(!type_exprs.is_empty(), "expected NodeTypeExpr for Function< => void>");
+    }
+
+    #[test]
+    fn parse_program_with_function_type_one_param() {
+        let source = "var f = null as Function<integer => void>;";
+        let root = parse(source).unwrap().expect("Function<integer => void>");
+        let type_exprs = root.find_all_nodes(Kind::NodeTypeExpr.into_syntax_kind());
+        assert!(!type_exprs.is_empty(), "expected NodeTypeExpr for Function<integer => void>");
+    }
+
+    #[test]
+    fn parse_program_with_function_type_three_params() {
+        let source = "var f = null as Function<integer, string, real => boolean>;";
+        let root = parse(source).unwrap().expect("Function<integer, string, real => boolean>");
+        let type_exprs = root.find_all_nodes(Kind::NodeTypeExpr.into_syntax_kind());
+        assert!(!type_exprs.is_empty(), "expected NodeTypeExpr for Function<...>");
     }
 }

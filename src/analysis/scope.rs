@@ -52,17 +52,31 @@ pub struct FunctionOverload {
     pub return_type: Option<Type>,
 }
 
+/// Visibility of a class member. Properties and methods are **public by default** when no modifier is given.
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+pub enum MemberVisibility {
+    Public,
+    Protected,
+    Private,
+}
+
+impl Default for MemberVisibility {
+    fn default() -> Self {
+        Self::Public
+    }
+}
+
 /// Fields and methods of a class (for member access type inference: this.x, this.method(), Class.staticMember).
 #[derive(Clone, Debug, Default)]
 pub struct ClassMembers {
-    /// Instance field name -> declared type.
-    pub fields: HashMap<String, Type>,
-    /// Instance method name -> (param types, return type).
-    pub methods: HashMap<String, (Vec<Type>, Type)>,
-    /// Static field name -> declared type (ClassName.staticField).
-    pub static_fields: HashMap<String, Type>,
-    /// Static method name -> (param types, return type) (ClassName.staticMethod).
-    pub static_methods: HashMap<String, (Vec<Type>, Type)>,
+    /// Instance field name -> (declared type, visibility).
+    pub fields: HashMap<String, (Type, MemberVisibility)>,
+    /// Instance method name -> (param types, return type, visibility).
+    pub methods: HashMap<String, (Vec<Type>, Type, MemberVisibility)>,
+    /// Static field name -> (declared type, visibility).
+    pub static_fields: HashMap<String, (Type, MemberVisibility)>,
+    /// Static method name -> (param types, return type, visibility).
+    pub static_methods: HashMap<String, (Vec<Type>, Type, MemberVisibility)>,
 }
 
 /// Single scope: variables and optional main-only data.
@@ -165,9 +179,22 @@ impl Scope {
     }
 
     /// Add a class name (main scope only). Keeps first declaration; span is for duplicate reporting.
+    /// A non-empty span (e.g. from the document) overwrites an empty one (e.g. from builtins/signatures)
+    /// so that LSP rename/definition use the real location.
     pub fn add_class(&mut self, name: String, span: Span) {
         if let Some(c) = &mut self.classes {
-            c.entry(name).or_insert(span);
+            let is_empty = span.start >= span.end;
+            match c.entry(name) {
+                std::collections::hash_map::Entry::Vacant(e) => {
+                    e.insert(span);
+                }
+                std::collections::hash_map::Entry::Occupied(mut e) => {
+                    let existing = e.get();
+                    if existing.start >= existing.end && !is_empty {
+                        e.insert(span);
+                    }
+                }
+            }
         }
     }
 
@@ -414,37 +441,50 @@ impl ScopeStore {
         }
     }
 
-    /// Register a class field for member type lookup (this.field_name).
-    pub fn add_class_field(&mut self, class_name: &str, field_name: String, ty: Type) {
+    /// Register a class field for member type lookup (this.field_name). Visibility defaults to Public.
+    pub fn add_class_field(
+        &mut self,
+        class_name: &str,
+        field_name: String,
+        ty: Type,
+        visibility: MemberVisibility,
+    ) {
         self.class_members
             .entry(class_name.to_string())
             .or_default()
             .fields
-            .insert(field_name, ty);
+            .insert(field_name, (ty, visibility));
     }
 
-    /// Register a class method for member type lookup (this.method_name returns function type).
+    /// Register a class method for member type lookup (this.method_name returns function type). Visibility defaults to Public.
     pub fn add_class_method(
         &mut self,
         class_name: &str,
         method_name: String,
         param_types: Vec<Type>,
         return_type: Type,
+        visibility: MemberVisibility,
     ) {
         self.class_members
             .entry(class_name.to_string())
             .or_default()
             .methods
-            .insert(method_name, (param_types, return_type));
+            .insert(method_name, (param_types, return_type, visibility));
     }
 
     /// Register a static field (ClassName.staticField).
-    pub fn add_class_static_field(&mut self, class_name: &str, field_name: String, ty: Type) {
+    pub fn add_class_static_field(
+        &mut self,
+        class_name: &str,
+        field_name: String,
+        ty: Type,
+        visibility: MemberVisibility,
+    ) {
         self.class_members
             .entry(class_name.to_string())
             .or_default()
             .static_fields
-            .insert(field_name, ty);
+            .insert(field_name, (ty, visibility));
     }
 
     /// Register a static method (ClassName.staticMethod).
@@ -454,22 +494,23 @@ impl ScopeStore {
         method_name: String,
         param_types: Vec<Type>,
         return_type: Type,
+        visibility: MemberVisibility,
     ) {
         self.class_members
             .entry(class_name.to_string())
             .or_default()
             .static_methods
-            .insert(method_name, (param_types, return_type));
+            .insert(method_name, (param_types, return_type, visibility));
     }
 
     /// Type of a member (field or method) on a class instance. Returns None if unknown.
     #[must_use]
     pub fn get_class_member_type(&self, class_name: &str, member_name: &str) -> Option<Type> {
         let members = self.class_members.get(class_name)?;
-        if let Some(ty) = members.fields.get(member_name) {
+        if let Some((ty, _)) = members.fields.get(member_name) {
             return Some(ty.clone());
         }
-        if let Some((params, ret)) = members.methods.get(member_name) {
+        if let Some((params, ret, _)) = members.methods.get(member_name) {
             return Some(Type::function(params.clone(), ret.clone()));
         }
         None
@@ -479,13 +520,19 @@ impl ScopeStore {
     #[must_use]
     pub fn get_class_static_member_type(&self, class_name: &str, member_name: &str) -> Option<Type> {
         let members = self.class_members.get(class_name)?;
-        if let Some(ty) = members.static_fields.get(member_name) {
+        if let Some((ty, _)) = members.static_fields.get(member_name) {
             return Some(ty.clone());
         }
-        if let Some((params, ret)) = members.static_methods.get(member_name) {
+        if let Some((params, ret, _)) = members.static_methods.get(member_name) {
             return Some(Type::function(params.clone(), ret.clone()));
         }
         None
+    }
+
+    /// Class members (instance and static fields/methods) for completion and member access.
+    #[must_use]
+    pub fn get_class_members(&self, class_name: &str) -> Option<&ClassMembers> {
+        self.class_members.get(class_name)
     }
 
     /// Get the type of a function when used as a value, searching from current scope up to root.

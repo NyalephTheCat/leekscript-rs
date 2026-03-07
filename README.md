@@ -1,6 +1,6 @@
 # leekscript-rs
 
-A [LeekScript](https://leekscript.com) parser implemented in Rust using [sipha](https://github.com/...) (PEG parser with green/red syntax trees).
+A [LeekScript](https://leekscript.com) parser implemented in Rust using [sipha](../sipha) (PEG parser with green/red syntax trees, in this repository).
 
 ## Status
 
@@ -49,10 +49,15 @@ let options = FormatterOptions::default();
 let formatted = format(&root, &options);
 ```
 
-## Example
+## Examples
 
 ```bash
+# Parse and print syntax tree for example .leek files
 cargo run -p leekscript-rs --example parse_leekscript
+
+# Validate a program (optional: path to .leek file)
+cargo run -p leekscript-rs --example validate_with_signatures
+cargo run -p leekscript-rs --example validate_with_signatures script.leek
 ```
 
 ## Tests
@@ -60,6 +65,10 @@ cargo run -p leekscript-rs --example parse_leekscript
 ```bash
 cargo test -p leekscript-rs
 ```
+
+## Architecture
+
+See [ARCHITECTURE.md](ARCHITECTURE.md) for grammar phases (token stream → expression → program), the analysis pipeline (ScopeBuilder → Validator → TypeChecker → DeprecationChecker), and how `DocumentAnalysis` ties parsing, analysis, and definition map for LSP.
 
 ## Reference
 

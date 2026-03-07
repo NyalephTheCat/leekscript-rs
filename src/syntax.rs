@@ -133,6 +133,48 @@ pub enum Kind {
 /// sipha uses this kind for a wrapper root when the grammar produces a single root node.
 pub const SYNTHETIC_ROOT: sipha::types::SyntaxKind = u16::MAX;
 
+/// LeekScript keywords (for completion and tooling). Sorted for display.
+pub const KEYWORDS: &[&str] = &[
+    "abstract", "and", "as", "break", "case", "catch", "class", "const", "constructor",
+    "continue", "default", "do", "else", "extends", "false", "final", "for", "function",
+    "global", "if", "in", "include", "instanceof", "let", "new", "not", "null", "or",
+    "private", "protected", "public", "reserved", "return", "static", "super", "switch",
+    "this", "throw", "true", "try", "var", "while", "xor",
+];
+
+/// Returns true if `name` is a valid LeekScript identifier (non-empty, starts with letter or
+/// underscore, rest alphanumeric or underscore). Used e.g. for rename validation in LSP.
+#[must_use]
+pub fn is_valid_identifier(name: &str) -> bool {
+    let mut chars = name.chars();
+    match chars.next() {
+        Some(c) if c.is_ascii_alphabetic() || c == '_' => {}
+        _ => return false,
+    }
+    chars.all(|c| c.is_ascii_alphanumeric() || c == '_')
+}
+
+#[cfg(test)]
+mod tests {
+    use super::is_valid_identifier;
+
+    #[test]
+    fn valid_identifiers() {
+        assert!(is_valid_identifier("x"));
+        assert!(is_valid_identifier("_private"));
+        assert!(is_valid_identifier("foo_bar"));
+        assert!(is_valid_identifier("Cell"));
+    }
+
+    #[test]
+    fn invalid_identifiers() {
+        assert!(!is_valid_identifier(""));
+        assert!(!is_valid_identifier("123"));
+        assert!(!is_valid_identifier("bad name"));
+        assert!(!is_valid_identifier("x-y"));
+    }
+}
+
 /// Field id for the "rhs" named child (right-hand side of binary expressions in the expression grammar).
 /// Use with [`sipha::red::SyntaxNode::field_by_id`] on a `NodeBinaryExpr` to get the right operand.
 pub const FIELD_RHS: sipha::types::FieldId = 0;

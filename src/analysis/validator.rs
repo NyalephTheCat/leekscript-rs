@@ -191,6 +191,9 @@ impl Visitor for Validator<'_> {
                 }
                 self.push_scope();
             }
+            Kind::NodeConstructorDecl => {
+                self.push_scope();
+            }
             Kind::NodeParam => {
                 if let Some((name, _)) = param_name(node) {
                     if let Some(declared) = self.declared_in_scope.last_mut() {
@@ -256,6 +259,7 @@ impl Visitor for Validator<'_> {
             Kind::NodeBlock
             | Kind::NodeFunctionDecl
             | Kind::NodeClassDecl
+            | Kind::NodeConstructorDecl
             | Kind::NodeWhileStmt
             | Kind::NodeForStmt
             | Kind::NodeForInStmt

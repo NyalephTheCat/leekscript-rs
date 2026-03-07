@@ -1,8 +1,9 @@
 //! Helpers to extract names and structure from syntax nodes (`VarDecl`, `FunctionDecl`, `ClassDecl`, etc.).
 
 use sipha::red::{SyntaxElement, SyntaxNode, SyntaxToken};
-use sipha::types::Span;
+use sipha::types::{IntoSyntaxKind, Span};
 
+use crate::analysis::scope::MemberVisibility;
 use crate::syntax::{Kind, FIELD_RHS};
 use crate::types::Type;
 
@@ -85,6 +86,17 @@ pub fn member_expr_member_name(node: &SyntaxNode) -> Option<String> {
         }
     }
     None
+}
+
+/// Returns the receiver name (identifier or keyword before the dot) from a `NodeMemberExpr`.
+/// For `Cell.getCell` returns `Some("Cell")`, for `this.update` returns `Some("this")`.
+#[must_use]
+pub fn member_expr_receiver_name(node: &SyntaxNode) -> Option<String> {
+    if node.kind_as::<Kind>() != Some(Kind::NodeMemberExpr) {
+        return None;
+    }
+    let receiver = node.child_nodes().next()?;
+    primary_expr_resolvable_name(&receiver)
 }
 
 /// Returns the declaration kind and name from a `NodeVarDecl`.
@@ -280,6 +292,37 @@ pub fn primary_expr_resolvable_name(node: &SyntaxNode) -> Option<String> {
         Some(Kind::KwSuper) => Some("super".to_string()),
         _ => None,
     }
+}
+
+/// If this primary is a `new ClassName(...)` constructor call, returns `Some((class_name, num_args))`.
+#[must_use]
+pub fn primary_expr_new_constructor(node: &SyntaxNode) -> Option<(String, usize)> {
+    if node.kind_as::<Kind>()? != Kind::NodePrimaryExpr {
+        return None;
+    }
+    let elements: Vec<SyntaxElement> = node
+        .children()
+        .filter(|e| match e {
+            SyntaxElement::Token(t) => !t.is_trivia(),
+            SyntaxElement::Node(_) => true,
+        })
+        .collect();
+    let first = elements.get(0)?;
+    let first_tok = match first {
+        SyntaxElement::Token(t) => t,
+        _ => return None,
+    };
+    if first_tok.kind_as::<Kind>() != Some(Kind::KwNew) {
+        return None;
+    }
+    let second = elements.get(1)?;
+    let class_name = match second {
+        SyntaxElement::Token(t) if t.kind_as::<Kind>() == Some(Kind::TokIdent) => t.text().to_string(),
+        SyntaxElement::Node(n) => n.first_token().filter(|t| t.kind_as::<Kind>() == Some(Kind::TokIdent))?.text().to_string(),
+        _ => return None,
+    };
+    let arg_count = node.find_all_nodes(Kind::NodeExpr.into_syntax_kind()).len();
+    Some((class_name, arg_count))
 }
 
 /// Check if this node is a simple identifier expression (for resolution).
@@ -505,6 +548,7 @@ pub fn param_name(node: &SyntaxNode) -> Option<(String, Span)> {
 /// Returns (name, type, is_static) where type is None if the field has no type annotation.
 #[must_use]
 pub fn class_field_info(node: &SyntaxNode) -> Option<(String, Option<Type>, bool)> {
+    use sipha::types::IntoSyntaxKind;
     use super::type_expr::{parse_type_expr, TypeExprResult};
     if node.kind_as::<Kind>() != Some(Kind::NodeClassField) {
         return None;
@@ -516,14 +560,68 @@ pub fn class_field_info(node: &SyntaxNode) -> Option<(String, Option<Type>, bool
         .take_while(|t| t.text() != "=" && t.text() != ";")
         .last()?;
     let name = name_token.text().to_string();
-    let type_expr_node = node
-        .child_nodes()
-        .find(|n| n.kind_as::<Kind>() == Some(Kind::NodeTypeExpr));
+    // Type may be nested (e.g. inside grammar choice/sequence); search descendants.
+    let type_expr_node = node.find_node(Kind::NodeTypeExpr.into_syntax_kind());
     let ty = type_expr_node.and_then(|te| match parse_type_expr(&te) {
         TypeExprResult::Ok(t) => Some(t),
         TypeExprResult::Err(_) => None,
     });
     Some((name, ty, is_static))
+}
+
+/// Visibility of a class member from the preceding modifier. **Public by default** when no modifier.
+/// The modifier that applies is the last visibility keyword before this member that is not "consumed" by another member (i.e. no other member's range contains that keyword).
+#[must_use]
+pub fn class_member_visibility(node: &SyntaxNode, root: &SyntaxNode) -> MemberVisibility {
+    let class_decl = node
+        .ancestors(root)
+        .into_iter()
+        .find(|a| a.kind_as::<Kind>() == Some(Kind::NodeClassDecl));
+    let class_decl = match class_decl {
+        Some(c) => c,
+        None => return MemberVisibility::Public,
+    };
+    let node_start = node.text_range().start;
+    let kind_field = Kind::NodeClassField.into_syntax_kind();
+    let kind_func = Kind::NodeFunctionDecl.into_syntax_kind();
+    // All member nodes in this class (for "who consumes this keyword" check).
+    let members: Vec<SyntaxNode> = class_decl
+        .find_all_nodes(kind_field)
+        .into_iter()
+        .chain(class_decl.find_all_nodes(kind_func))
+        .collect();
+    // Collect (token_end, vis) for each visibility keyword before this node.
+    let mut vis_keywords: Vec<(u32, MemberVisibility)> = Vec::new();
+    for token in class_decl.descendant_tokens() {
+        if token.is_trivia() {
+            continue;
+        }
+        let range = token.text_range();
+        // Include visibility keywords that are before or at the start of this member (so we see the modifier that applies to this member).
+        if range.start <= node_start {
+            match token.text() {
+                "public" => vis_keywords.push((range.end, MemberVisibility::Public)),
+                "private" => vis_keywords.push((range.end, MemberVisibility::Private)),
+                "protected" => vis_keywords.push((range.end, MemberVisibility::Protected)),
+                _ => {}
+            }
+        }
+        if range.start > node_start {
+            break; // past the start of this member
+        }
+    }
+    for (end, vis) in vis_keywords.into_iter().rev() {
+        let sibling_consumes_keyword = members.iter().any(|sib| {
+            let r = sib.text_range();
+            sib.text_range() != node.text_range()
+                && r.start <= end
+                && r.end > end
+        });
+        if !sibling_consumes_keyword {
+            return vis;
+        }
+    }
+    MemberVisibility::Public
 }
 
 /// True if this `NodeFunctionDecl` is a static class method (has "static" as preceding sibling in class body).

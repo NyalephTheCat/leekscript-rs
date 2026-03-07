@@ -185,5 +185,6 @@ fn add_statements(g: &mut sipha::builder::GrammarBuilder) {
     statements::add_for_in_stmt(g);
     statements::add_do_while_stmt(g);
     statements::add_statement(g);
+    statements::add_statement_sync(g);
     statements::add_program(g);
 }
