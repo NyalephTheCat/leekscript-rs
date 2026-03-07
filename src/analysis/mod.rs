@@ -1,5 +1,6 @@
 //! Semantic analysis: scope building and validation.
 
+mod deprecation;
 mod error;
 mod node_helpers;
 mod scope;
@@ -58,8 +59,12 @@ pub fn analyze(root: &SyntaxNode) -> AnalysisResult {
     let mut type_checker = TypeChecker::new(&builder.store, root);
     let _ = root.walk(&mut type_checker, &options);
 
+    let mut deprecation_checker = deprecation::DeprecationChecker::new();
+    let _ = root.walk(&mut deprecation_checker, &options);
+
     let mut diagnostics = validator.diagnostics;
     diagnostics.extend(type_checker.diagnostics);
+    diagnostics.extend(deprecation_checker.diagnostics);
 
     AnalysisResult {
         diagnostics,
@@ -180,8 +185,12 @@ pub fn analyze_with_signatures(
     let mut type_checker = TypeChecker::new(&builder.store, program_root);
     let _ = program_root.walk(&mut type_checker, &options);
 
+    let mut deprecation_checker = deprecation::DeprecationChecker::new();
+    let _ = program_root.walk(&mut deprecation_checker, &options);
+
     let mut diagnostics = validator.diagnostics;
     diagnostics.extend(type_checker.diagnostics);
+    diagnostics.extend(deprecation_checker.diagnostics);
 
     AnalysisResult {
         diagnostics,
@@ -315,5 +324,21 @@ mod tests {
             "overloaded f(1) and f(1,2) should be valid: {:?}",
             result.diagnostics
         );
+    }
+
+    #[test]
+    fn analyze_deprecation_strict_eq_and_neq() {
+        let source = "return 1 === 2 !== true;";
+        let root = parse(source).unwrap().expect("parse");
+        let result = analyze(&root);
+        assert!(result.is_valid(), "program with === and !== still valid");
+        let deprecations: Vec<_> = result
+            .diagnostics
+            .iter()
+            .filter(|d| d.severity == sipha::error::Severity::Deprecation)
+            .collect();
+        assert_eq!(deprecations.len(), 2, "expected two deprecation diagnostics");
+        assert!(deprecations.iter().any(|d| d.message.contains("===")));
+        assert!(deprecations.iter().any(|d| d.message.contains("!==")));
     }
 }

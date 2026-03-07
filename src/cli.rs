@@ -303,6 +303,20 @@ pub fn run_validate(args: &ValidateArgs) -> i32 {
             } else {
                 analyze_with_signatures(&root, &signature_roots)
             };
+            let line_index = LineIndex::new(source.as_bytes());
+            if !args.json {
+                for d in &result.diagnostics {
+                    if matches!(
+                        d.severity,
+                        sipha::error::Severity::Warning | sipha::error::Severity::Deprecation
+                    ) {
+                        eprintln!(
+                            "{}",
+                            d.format_with_source(source.as_bytes(), &line_index)
+                        );
+                    }
+                }
+            }
             if result.has_errors() {
                 if args.json {
                     let messages: Vec<String> = result
@@ -316,7 +330,6 @@ pub fn run_validate(args: &ValidateArgs) -> i32 {
                         serde_json::json!({ "valid": false, "errors": messages })
                     );
                 } else {
-                    let line_index = LineIndex::new(source.as_bytes());
                     for d in &result.diagnostics {
                         if d.severity == sipha::error::Severity::Error {
                             eprintln!(
