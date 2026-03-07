@@ -17,6 +17,7 @@ path = "src/main.rs"
 [features]
 default = []
 transform = ["sipha/transform"]
+utf16 = ["sipha/utf16"]
 
 [dependencies]
 clap = { version = "4", features = ["derive"] }

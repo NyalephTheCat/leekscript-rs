@@ -329,7 +329,7 @@ pub fn add_expr_mul(g: &mut sipha::builder::GrammarBuilder) {
                     Box::new(|g| { g.call("op_backslash"); }),
                     Box::new(|g| { g.call("op_percent"); }),
                 ]);
-                g.call("expr_power");
+                g.node_with_field(Kind::NodeExpr, "rhs", |g| { g.call("expr_power"); });
             });
         });
     });

@@ -8,6 +8,7 @@ mod type_checker;
 mod validator;
 
 pub use error::AnalysisError;
+pub use node_helpers::binary_expr_rhs;
 pub use scope::{ResolvedSymbol, Scope, ScopeId, ScopeKind, ScopeStore, VariableInfo, VariableKind};
 pub use scope_builder::ScopeBuilder;
 pub use type_checker::TypeChecker;
@@ -40,12 +41,15 @@ impl AnalysisResult {
 }
 
 /// Build scope from the tree and run validation. Returns diagnostics and the scope store.
+///
+/// Pass order: (1) ScopeBuilder runs first and builds the scope store and scope ID sequence.
+/// (2) Validator and (3) TypeChecker then use that store so resolution and type checking see the same scopes.
 pub fn analyze(root: &SyntaxNode) -> AnalysisResult {
     let options = WalkOptions::nodes_only();
     let mut builder = ScopeBuilder::new();
     let _ = root.walk(&mut builder, &options);
 
-    let mut validator = Validator::new(&builder.store);
+    let mut validator = Validator::new(&builder.store, &builder.scope_id_sequence);
     let _ = root.walk(&mut validator, &options);
 
     let mut type_checker = TypeChecker::new(&builder.store, root);
@@ -166,7 +170,7 @@ pub fn analyze_with_signatures(
     let mut builder = ScopeBuilder::with_store(store);
     let _ = program_root.walk(&mut builder, &options);
 
-    let mut validator = Validator::new(&builder.store);
+    let mut validator = Validator::new(&builder.store, &builder.scope_id_sequence);
     let _ = program_root.walk(&mut validator, &options);
 
     let mut type_checker = TypeChecker::new(&builder.store, program_root);
@@ -266,6 +270,36 @@ mod tests {
             result.is_valid(),
             "method with default params should be allowed: {:?}",
             result.diagnostics
+        );
+    }
+
+    #[test]
+    fn analyze_local_variable_resolved() {
+        // Block shares function scope so locals are visible for the whole body.
+        let source = "function f() { var x = 1; return x; }";
+        let root = parse(source).unwrap().expect("parse");
+        let result = analyze(&root);
+        assert!(
+            result.is_valid(),
+            "function local variable should resolve: {:?}",
+            result.diagnostics
+        );
+        // Same for method (typed local): scope_id_sequence + var_decl_info for type_expr; name.
+        let source2 = r"
+            class C {
+                function m() {
+                    integer? y = null;
+                    return y;
+                }
+            }
+            return null;
+        ";
+        let root2 = parse(source2).unwrap().expect("parse");
+        let result2 = analyze(&root2);
+        assert!(
+            result2.is_valid(),
+            "method local variable should resolve: {:?}",
+            result2.diagnostics
         );
     }
 

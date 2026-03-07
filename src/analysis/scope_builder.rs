@@ -5,20 +5,27 @@ use sipha::walk::{Visitor, WalkResult};
 
 use crate::syntax::Kind;
 
-use super::node_helpers::{class_decl_info, function_decl_info, param_name, var_decl_info};
+use super::node_helpers::{class_decl_info, for_in_loop_vars, function_decl_info, param_name, var_decl_info};
 use super::scope::{ScopeId, ScopeKind, ScopeStore, VariableInfo, VariableKind};
 
 /// Builds scope tree by walking the syntax tree; maintains a stack of scope IDs.
+/// Records the sequence of scope IDs pushed (in walk order) so Validator can use the same IDs.
 pub struct ScopeBuilder {
     pub store: ScopeStore,
     stack: Vec<ScopeId>,
+    /// Scope IDs in the order they were pushed (for Validator sync).
+    pub scope_id_sequence: Vec<ScopeId>,
 }
 
 impl ScopeBuilder {
     pub fn new() -> Self {
         let store = ScopeStore::new();
         let stack = vec![store.root_id()];
-        Self { store, stack }
+        Self {
+            store,
+            stack,
+            scope_id_sequence: Vec::new(),
+        }
     }
 
     /// Build scope from a program tree using an existing store (e.g. pre-seeded from signature files).
@@ -27,6 +34,7 @@ impl ScopeBuilder {
         Self {
             store,
             stack: vec![root_id],
+            scope_id_sequence: Vec::new(),
         }
     }
 
@@ -38,6 +46,7 @@ impl ScopeBuilder {
         let parent = self.current().expect("scope stack empty");
         let id = self.store.push(kind, parent);
         self.stack.push(id);
+        self.scope_id_sequence.push(id);
     }
 
     fn pop(&mut self) {
@@ -103,6 +112,19 @@ impl Visitor for ScopeBuilder {
             }
             Kind::NodeWhileStmt | Kind::NodeForStmt | Kind::NodeForInStmt | Kind::NodeDoWhileStmt => {
                 self.push(ScopeKind::Loop);
+                if matches!(kind, Kind::NodeForInStmt) {
+                    for (name, span) in for_in_loop_vars(node) {
+                        if let Some(current_id) = self.current() {
+                            if let Some(scope) = self.store.get_mut(current_id) {
+                                scope.add_variable(VariableInfo {
+                                    name,
+                                    kind: VariableKind::Local,
+                                    span,
+                                });
+                            }
+                        }
+                    }
+                }
             }
             Kind::NodeVarDecl => {
                 if let Some(info) = var_decl_info(node) {

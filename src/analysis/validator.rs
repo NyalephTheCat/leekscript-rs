@@ -9,26 +9,31 @@ use std::collections::HashSet;
 use crate::syntax::Kind;
 
 use super::error::AnalysisError;
-use super::node_helpers::{class_decl_info, function_decl_info, param_name, expr_identifier, var_decl_info};
+use super::node_helpers::{class_decl_info, for_in_loop_vars, function_decl_info, param_name, expr_identifier, var_decl_info};
 use super::scope::{ScopeId, ScopeKind, ScopeStore};
 
 /// Collects diagnostics and maintains scope stack (replaying scope structure from first pass).
+/// Uses the same scope ID sequence as ScopeBuilder so resolve() looks up the correct scope.
 pub struct Validator<'a> {
     pub store: &'a ScopeStore,
     stack: Vec<ScopeId>,
     /// Names declared in the current scope (for duplicate detection).
     declared_in_scope: Vec<HashSet<String>>,
-    next_scope_id: usize,
+    /// Index into scope_id_sequence for the next push.
+    scope_id_index: usize,
+    /// Scope IDs in walk order (from ScopeBuilder) so we push the same IDs.
+    scope_id_sequence: &'a [ScopeId],
     pub diagnostics: Vec<SemanticDiagnostic>,
 }
 
 impl<'a> Validator<'a> {
-    pub fn new(store: &'a ScopeStore) -> Self {
+    pub fn new(store: &'a ScopeStore, scope_id_sequence: &'a [ScopeId]) -> Self {
         Self {
             store,
             stack: vec![ScopeId(0)],
             declared_in_scope: vec![HashSet::new()],
-            next_scope_id: 1,
+            scope_id_index: 0,
+            scope_id_sequence,
             diagnostics: Vec::new(),
         }
     }
@@ -38,8 +43,13 @@ impl<'a> Validator<'a> {
     }
 
     fn push_scope(&mut self) {
-        self.stack.push(ScopeId(self.next_scope_id));
-        self.next_scope_id += 1;
+        let id = self
+            .scope_id_sequence
+            .get(self.scope_id_index)
+            .copied()
+            .unwrap_or_else(|| ScopeId(self.scope_id_index + 1));
+        self.scope_id_index += 1;
+        self.stack.push(id);
         self.declared_in_scope.push(HashSet::new());
     }
 
@@ -51,9 +61,18 @@ impl<'a> Validator<'a> {
     }
 
     fn resolve(&self, name: &str) -> bool {
-        self.store
+        if self
+            .store
             .resolve(self.current_scope(), name)
             .is_some()
+        {
+            return true;
+        }
+        // Fallback: variable may be declared in current or outer scope but not yet in store
+        // (e.g. same pass order); treat as resolved if we've seen it in declared_in_scope.
+        self.declared_in_scope
+            .iter()
+            .any(|set| set.contains(name))
     }
 
     fn in_loop(&self) -> bool {
@@ -107,6 +126,13 @@ impl Visitor for Validator<'_> {
             | Kind::NodeForInStmt
             | Kind::NodeDoWhileStmt => {
                 self.push_scope();
+                if matches!(kind, Kind::NodeForInStmt) {
+                    for (name, _) in for_in_loop_vars(node) {
+                        if let Some(declared) = self.declared_in_scope.last_mut() {
+                            let _ = declared.insert(name);
+                        }
+                    }
+                }
             }
             Kind::NodeInclude => {
                 if !self.in_main_block() {

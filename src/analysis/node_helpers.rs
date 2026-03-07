@@ -3,7 +3,7 @@
 use sipha::red::{SyntaxElement, SyntaxNode, SyntaxToken};
 use sipha::types::Span;
 
-use crate::syntax::Kind;
+use crate::syntax::{Kind, FIELD_RHS};
 
 /// Declaration kind for a variable declaration node.
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
@@ -23,49 +23,71 @@ pub struct VarDeclInfo {
     pub name_span: Span,
 }
 
-/// Returns the declaration kind and name from a NodeVarDecl.
-/// The name is the token from keyword_or_ident (after "var"/"global"/"const"/"let" or type_expr).
-pub fn var_decl_info(node: &SyntaxNode) -> Option<VarDeclInfo> {
-    if node.kind_as::<Kind>() != Some(Kind::NodeVarDecl) {
-        return None;
-    }
-    let mut kind = VarDeclKind::Typed;
-    let mut skip_one = true;
-    for child in node.children() {
-        match child {
+/// Collect identifier tokens (name, span) from node's subtree in source order, stopping at first "=".
+fn idents_before_assign(
+    node: &SyntaxNode,
+    idents: &mut Vec<(String, Span)>,
+    first_token_text: &mut Option<String>,
+) -> bool {
+    use sipha::red::SyntaxElement;
+    for elem in node.children() {
+        match elem {
             SyntaxElement::Token(t) if !t.is_trivia() => {
-                if skip_one {
-                    kind = match t.text() {
-                        "var" => VarDeclKind::Var,
-                        "global" => VarDeclKind::Global,
-                        "const" => VarDeclKind::Const,
-                        "let" => VarDeclKind::Let,
-                        _ => VarDeclKind::Typed,
-                    };
-                    skip_one = false;
-                } else {
-                    return Some(VarDeclInfo {
-                        kind,
-                        name: t.text().to_string(),
-                        name_span: t.text_range(),
-                    });
+                if first_token_text.is_none() {
+                    *first_token_text = Some(t.text().to_string());
+                }
+                if t.text() == "=" {
+                    return true;
+                }
+                if t.kind_as::<Kind>() == Some(Kind::TokIdent) {
+                    idents.push((t.text().to_string(), t.text_range()));
                 }
             }
             SyntaxElement::Node(n) => {
-                if skip_one {
-                    skip_one = false;
-                } else if let Some(tok) = n.first_token() {
-                    return Some(VarDeclInfo {
-                        kind,
-                        name: tok.text().to_string(),
-                        name_span: tok.text_range(),
-                    });
+                if idents_before_assign(&n, idents, first_token_text) {
+                    return true;
                 }
             }
             _ => {}
         }
     }
-    None
+    false
+}
+
+/// Returns the right-hand side expression of a `NodeBinaryExpr` when the grammar labels it (e.g. mul-level `a * b`).
+/// Uses the named field "rhs" so structure is stable regardless of child order.
+pub fn binary_expr_rhs(node: &SyntaxNode) -> Option<SyntaxNode> {
+    if node.kind_as::<Kind>() != Some(Kind::NodeBinaryExpr) {
+        return None;
+    }
+    node.field_by_id(FIELD_RHS)
+}
+
+/// Returns the declaration kind and name from a NodeVarDecl.
+/// For "var x", "global T x": name is the first identifier after the keyword.
+/// For typed form "Array<EffectOverTime> arr" or "integer? y": name is the *last* identifier before "=" (type names come first).
+pub fn var_decl_info(node: &SyntaxNode) -> Option<VarDeclInfo> {
+    if node.kind_as::<Kind>() != Some(Kind::NodeVarDecl) {
+        return None;
+    }
+    let mut idents = Vec::new();
+    let mut first_token_text: Option<String> = None;
+    idents_before_assign(node, &mut idents, &mut first_token_text);
+    let first_token_text = first_token_text.as_deref();
+    let last_idx = idents.len().saturating_sub(1);
+    let (kind, name_idx) = match first_token_text {
+        Some("var") => (VarDeclKind::Var, 0),
+        Some("global") => (VarDeclKind::Global, last_idx),
+        Some("const") => (VarDeclKind::Const, 0),
+        Some("let") => (VarDeclKind::Let, 0),
+        _ => (VarDeclKind::Typed, last_idx),
+    };
+    let (name, name_span) = idents.get(name_idx).cloned()?;
+    Some(VarDeclInfo {
+        kind,
+        name,
+        name_span,
+    })
 }
 
 /// Info extracted from a NodeFunctionDecl (name and parameter counts).
@@ -161,6 +183,62 @@ pub fn expr_identifier(node: &SyntaxNode) -> Option<(String, Span)> {
 /// Check if this node is a simple identifier expression (for resolution).
 pub fn is_identifier_expr(node: &SyntaxNode) -> bool {
     expr_identifier(node).is_some()
+}
+
+/// Variable name(s) and span(s) from a NodeForInStmt: key and optionally value (for key : valueVar in expr).
+/// Skips type_expr nodes and for/var/in/paren tokens so we get only the loop variable identifiers.
+pub fn for_in_loop_vars(node: &SyntaxNode) -> Vec<(String, Span)> {
+    if node.kind_as::<Kind>() != Some(Kind::NodeForInStmt) {
+        return Vec::new();
+    }
+    let skip_tokens: &[&str] = &["for", "(", ")", "var", "in", ":"];
+    let mut vars = Vec::new();
+    let mut state = 0u8; // 0 = need key, 1 = need colon or in, 2 = need value
+    for child in node.children() {
+        match child {
+            SyntaxElement::Token(t) if !t.is_trivia() => {
+                let text = t.text();
+                if text == "in" {
+                    break;
+                }
+                if skip_tokens.contains(&text) {
+                    if text == ":" && state == 1 {
+                        state = 2;
+                    }
+                    continue;
+                }
+                if state == 0 {
+                    vars.push((text.to_string(), t.text_range()));
+                    state = 1;
+                } else if state == 2 {
+                    vars.push((text.to_string(), t.text_range()));
+                    break;
+                }
+            }
+            SyntaxElement::Node(n) => {
+                if n.kind_as::<Kind>() == Some(Kind::NodeTypeExpr) {
+                    continue;
+                }
+                if state == 0 {
+                    if let Some(tok) = n.first_token() {
+                        if !tok.is_trivia() && !skip_tokens.contains(&tok.text()) {
+                            vars.push((tok.text().to_string(), tok.text_range()));
+                            state = 1;
+                        }
+                    }
+                } else if state == 2 {
+                    if let Some(tok) = n.first_token() {
+                        if !tok.is_trivia() && !skip_tokens.contains(&tok.text()) {
+                            vars.push((tok.text().to_string(), tok.text_range()));
+                            break;
+                        }
+                    }
+                }
+            }
+            _ => {}
+        }
+    }
+    vars
 }
 
 /// Parameter name and span from a NodeParam (for scope building).

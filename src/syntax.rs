@@ -132,6 +132,10 @@ pub enum Kind {
 /// sipha uses this kind for a wrapper root when the grammar produces a single root node.
 pub const SYNTHETIC_ROOT: sipha::types::SyntaxKind = u16::MAX;
 
+/// Field id for the "rhs" named child (right-hand side of binary expressions in the expression grammar).
+/// Use with [`sipha::red::SyntaxNode::field_by_id`] on a `NodeBinaryExpr` to get the right operand.
+pub const FIELD_RHS: sipha::types::FieldId = 0;
+
 /// Human-readable name for a syntax kind (for diagnostics and debugging).
 pub fn kind_name(kind: sipha::types::SyntaxKind) -> &'static str {
     if kind == SYNTHETIC_ROOT {
