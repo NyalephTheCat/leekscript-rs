@@ -1,4 +1,4 @@
-//! Generic visitor over the parsed LeekScript syntax tree.
+//! Generic visitor over the parsed `LeekScript` syntax tree.
 //!
 //! Re-exports sipha's tree walk ([`Visitor`], [`WalkOptions`], [`walk`], [`WalkResult`]).
 //! Implement [`Visitor`] and call [`walk`] (or `root.walk(...)`) with your visitor and options.

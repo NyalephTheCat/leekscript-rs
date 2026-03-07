@@ -33,6 +33,7 @@ impl Default for TreeDisplayOptions {
 
 impl TreeDisplayOptions {
     /// Structure-only: only syntax nodes, no tokens.
+    #[must_use] 
     pub fn structure_only() -> Self {
         Self {
             show_tokens: false,
@@ -41,6 +42,7 @@ impl TreeDisplayOptions {
     }
 
     /// Full tree: nodes and all tokens including trivia.
+    #[must_use] 
     pub fn full() -> Self {
         Self {
             show_trivia: true,
@@ -57,7 +59,7 @@ fn node_id(node: &SyntaxNode) -> (usize, u32) {
     )
 }
 
-/// Elements to show for a node (filtered by show_trivia), with `is_last` for tree connectors.
+/// Elements to show for a node (filtered by `show_trivia`), with `is_last` for tree connectors.
 fn visible_elements(
     node: &SyntaxNode,
     options: &TreeDisplayOptions,
@@ -80,6 +82,7 @@ fn visible_elements(
 /// Format a syntax tree starting at `root` as a multi-line string.
 ///
 /// Detects cycles and prints `[cycle]` to avoid infinite recursion.
+#[must_use] 
 pub fn format_syntax_tree(root: &SyntaxNode, options: &TreeDisplayOptions) -> String {
     let mut out = String::new();
     let mut visited = HashSet::new();
@@ -128,9 +131,9 @@ fn format_node(
     format_node_header(prefix, is_last, kind_str, out, false);
 
     let new_prefix = if is_last {
-        format!("{}    ", prefix)
+        format!("{prefix}    ")
     } else {
-        format!("{}│   ", prefix)
+        format!("{prefix}│   ")
     };
 
     format_node_children(node, options, &new_prefix, out, visited);
@@ -177,7 +180,7 @@ fn format_token(
         let display = if text.len() > options.max_token_text_len {
             format!("{:?}...", &text[..options.max_token_text_len])
         } else {
-            format!("{:?}", text)
+            format!("{text:?}")
         };
         out.push(' ');
         out.push_str(&display);

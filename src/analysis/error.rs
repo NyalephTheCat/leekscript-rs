@@ -9,19 +9,19 @@ use sipha::types::Span;
 #[derive(Clone, Copy, Debug, PartialEq, Eq)]
 #[non_exhaustive]
 pub enum AnalysisError {
-    /// Unknown variable or function name (Java: UNKNOWN_VARIABLE_OR_FUNCTION, 33).
+    /// Unknown variable or function name (Java: `UNKNOWN_VARIABLE_OR_FUNCTION`, 33).
     UnknownVariableOrFunction,
-    /// Break outside of loop (Java: BREAK_OUT_OF_LOOP, 12).
+    /// Break outside of loop (Java: `BREAK_OUT_OF_LOOP`, 12).
     BreakOutOfLoop,
-    /// Continue outside of loop (Java: CONTINUE_OUT_OF_LOOP, 13).
+    /// Continue outside of loop (Java: `CONTINUE_OUT_OF_LOOP`, 13).
     ContinueOutOfLoop,
-    /// Variable/name already declared in this scope (Java: VARIABLE_NAME_UNAVAILABLE, 21).
+    /// Variable/name already declared in this scope (Java: `VARIABLE_NAME_UNAVAILABLE`, 21).
     VariableNameUnavailable,
-    /// Include only allowed in main block (Java: INCLUDE_ONLY_IN_MAIN_BLOCK, 14).
+    /// Include only allowed in main block (Java: `INCLUDE_ONLY_IN_MAIN_BLOCK`, 14).
     IncludeOnlyInMainBlock,
-    /// Function only in main block (Java: FUNCTION_ONLY_IN_MAIN_BLOCK, 19).
+    /// Function only in main block (Java: `FUNCTION_ONLY_IN_MAIN_BLOCK`, 19).
     FunctionOnlyInMainBlock,
-    /// Global only in main block (Java: GLOBAL_ONLY_IN_MAIN_BLOCK, 27).
+    /// Global only in main block (Java: `GLOBAL_ONLY_IN_MAIN_BLOCK`, 27).
     GlobalOnlyInMainBlock,
     /// Duplicate class name in main scope (Java: duplicate class).
     DuplicateClassName,
@@ -37,6 +37,7 @@ pub enum AnalysisError {
 
 impl AnalysisError {
     /// Short code for diagnostics (e.g. E033).
+    #[must_use] 
     pub fn code(self) -> &'static str {
         match self {
             Self::UnknownVariableOrFunction => "E033",
@@ -55,6 +56,7 @@ impl AnalysisError {
     }
 
     /// Human-readable message.
+    #[must_use] 
     pub fn message(self) -> &'static str {
         match self {
             Self::UnknownVariableOrFunction => "unknown variable or function",
@@ -75,6 +77,7 @@ impl AnalysisError {
     }
 
     /// Build a semantic diagnostic for this error at the given span.
+    #[must_use] 
     pub fn at(self, span: Span) -> SemanticDiagnostic {
         SemanticDiagnostic::error(span, self.message()).with_code(self.code())
     }
@@ -83,8 +86,7 @@ impl AnalysisError {
 /// Build a wrong-arity diagnostic with expected vs actual counts.
 pub fn wrong_arity_at(span: Span, expected: usize, actual: usize) -> SemanticDiagnostic {
     let message = format!(
-        "wrong number of arguments (expected {}, got {})",
-        expected, actual
+        "wrong number of arguments (expected {expected}, got {actual})"
     );
     SemanticDiagnostic::error(span, message).with_code(AnalysisError::WrongArity.code())
 }

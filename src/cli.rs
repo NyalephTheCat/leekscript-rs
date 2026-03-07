@@ -29,7 +29,7 @@ pub struct Cli {
 
 #[derive(Subcommand)]
 pub enum Commands {
-    /// Format LeekScript source files or stdin.
+    /// Format `LeekScript` source files or stdin.
     Format(FormatArgs),
     /// Check syntax and optionally run analyses (stub).
     Validate(ValidateArgs),
@@ -87,13 +87,10 @@ pub enum ParseOutcome {
 
 /// Read source from file or stdin.
 pub fn read_input(file: Option<&Path>) -> Result<String, String> {
-    let s = match file {
-        Some(path) => std::fs::read_to_string(path).map_err(|e| e.to_string())?,
-        None => {
-            let mut s = String::new();
-            std::io::stdin().read_to_string(&mut s).map_err(|e| e.to_string())?;
-            s
-        }
+    let s = if let Some(path) = file { std::fs::read_to_string(path).map_err(|e| e.to_string())? } else {
+        let mut s = String::new();
+        std::io::stdin().read_to_string(&mut s).map_err(|e| e.to_string())?;
+        s
     };
     Ok(s)
 }
@@ -119,13 +116,13 @@ fn filename_from_input(input: Option<&Path>) -> &str {
 
 fn report_parse_error(e: &ParseError, source: &str, filename: &str) {
     if let Some(report) = parse_error_to_miette(e, source, filename) {
-        eprintln!("{:?}", report);
+        eprintln!("{report:?}");
     } else {
-        eprintln!("leekscript: parse error: {}", e);
+        eprintln!("leekscript: parse error: {e}");
     }
 }
 
-/// Handles a failed parse outcome: reports error (or emits JSON when `json` is true) and returns EXIT_FAILURE.
+/// Handles a failed parse outcome: reports error (or emits JSON when `json` is true) and returns `EXIT_FAILURE`.
 fn handle_parse_failure(
     outcome: ParseOutcome,
     input: Option<&Path>,
@@ -138,7 +135,7 @@ fn handle_parse_failure(
             if json {
                 println!("{}", serde_json::json!({ "valid": false, "message": "empty parse" }));
             } else {
-                eprintln!("leekscript {}: empty parse result", command_label);
+                eprintln!("leekscript {command_label}: empty parse result");
             }
             EXIT_FAILURE
         }
@@ -157,7 +154,7 @@ fn handle_parse_failure(
             if json {
                 println!("{}", serde_json::json!({ "valid": false, "message": e }));
             } else {
-                eprintln!("leekscript {}: {}", command_label, e);
+                eprintln!("leekscript {command_label}: {e}");
             }
             EXIT_FAILURE
         }
@@ -184,15 +181,12 @@ pub fn run_format(args: &FormatArgs) -> i32 {
             }
 
             if args.in_place {
-                let path = match &args.input {
-                    Some(p) => p.clone(),
-                    None => {
-                        eprintln!("leekscript format: --in-place requires an input file");
-                        return EXIT_FAILURE;
-                    }
+                let path = if let Some(p) = &args.input { p.clone() } else {
+                    eprintln!("leekscript format: --in-place requires an input file");
+                    return EXIT_FAILURE;
                 };
                 if let Err(e) = std::fs::write(&path, &formatted) {
-                    eprintln!("leekscript format: write error: {}", e);
+                    eprintln!("leekscript format: write error: {e}");
                     return EXIT_FAILURE;
                 }
                 return EXIT_SUCCESS;
@@ -200,13 +194,13 @@ pub fn run_format(args: &FormatArgs) -> i32 {
 
             if let Some(ref out_path) = args.output {
                 if let Err(e) = std::fs::write(out_path, &formatted) {
-                    eprintln!("leekscript format: write error: {}", e);
+                    eprintln!("leekscript format: write error: {e}");
                     return EXIT_FAILURE;
                 }
                 return EXIT_SUCCESS;
             }
 
-            print!("{}", formatted);
+            print!("{formatted}");
             EXIT_SUCCESS
         }
         ParseOutcome::Empty => handle_parse_failure(ParseOutcome::Empty, input, false, "format"),
@@ -229,9 +223,9 @@ fn load_signatures_from_dir(dir: &Path) -> Vec<sipha::red::SyntaxNode> {
         return roots;
     };
     let mut files: Vec<_> = entries
-        .filter_map(|e| e.ok())
+        .filter_map(std::result::Result::ok)
         .map(|e| e.path())
-        .filter(|p| p.is_file() && p.extension().map_or(false, |e| e == "sig"))
+        .filter(|p| p.is_file() && p.extension().is_some_and(|e| e == "sig"))
         .collect();
     files.sort_by_key(|p| p.as_os_str().to_owned());
     for path in files {

@@ -1,4 +1,4 @@
-//! LeekScript CLI: format, validate, and other source manipulations.
+//! `LeekScript` CLI: format, validate, and other source manipulations.
 
 mod cli;
 

@@ -247,8 +247,8 @@ pub fn add_class_method(g: &mut sipha::builder::GrammarBuilder) {
     });
 }
 
-/// Class field: [static] [final] ( type_expr keyword_or_ident | keyword_or_ident ) [= expr] ;
-/// Matches LeekScript Java endClassMember: optional type then name (method vs field by ( vs =).
+/// Class field: [static] [final] ( `type_expr` `keyword_or_ident` | `keyword_or_ident` ) [= expr] ;
+/// Matches `LeekScript` Java endClassMember: optional type then name (method vs field by ( vs =).
 pub fn add_class_field(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("class_field", |g: &mut sipha::builder::GrammarBuilder| {
         g.node(Kind::NodeClassField, |g| {
@@ -352,8 +352,8 @@ pub fn add_for_stmt(g: &mut sipha::builder::GrammarBuilder) {
     });
 }
 
-/// For-in: for ( [type_expr] [var] key [ : [type_expr] [var] valueVar ] in expr ) statement.
-/// Matches LeekScript Java: optional type then key, or key : optional type then value name.
+/// For-in: for ( [`type_expr`] [var] key [ : [`type_expr`] [var] valueVar ] in expr ) statement.
+/// Matches `LeekScript` Java: optional type then key, or key : optional type then value name.
 pub fn add_for_in_stmt(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("for_in_stmt", |g: &mut sipha::builder::GrammarBuilder| {
         g.node(Kind::NodeForInStmt, |g| {

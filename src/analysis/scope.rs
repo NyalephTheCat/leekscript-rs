@@ -1,4 +1,4 @@
-//! Scope model for LeekScript: block chain with variables, globals, functions, classes.
+//! Scope model for `LeekScript`: block chain with variables, globals, functions, classes.
 
 use sipha::types::Span;
 use std::collections::HashMap;
@@ -45,13 +45,14 @@ pub struct Scope {
     variables: HashMap<String, VariableInfo>,
     /// Main scope only: names declared as global.
     globals: Option<std::collections::HashSet<String>>,
-    /// Main scope only: user function name -> list of (min_arity, max_arity, span) for overloads and default params.
+    /// Main scope only: user function name -> list of (`min_arity`, `max_arity`, span) for overloads and default params.
     functions: Option<HashMap<String, Vec<(usize, usize, Span)>>>,
     /// Main scope only: class name -> first declaration span.
     classes: Option<HashMap<String, Span>>,
 }
 
 impl Scope {
+    #[must_use] 
     pub fn new_main() -> Self {
         Self {
             kind: ScopeKind::Main,
@@ -63,6 +64,7 @@ impl Scope {
         }
     }
 
+    #[must_use] 
     pub fn new_child(kind: ScopeKind, parent: ScopeId) -> Self {
         Self {
             kind,
@@ -78,6 +80,7 @@ impl Scope {
         self.variables.insert(info.name.clone(), info);
     }
 
+    #[must_use] 
     pub fn has_variable(&self, name: &str) -> bool {
         self.variables.contains_key(name)
     }
@@ -89,7 +92,7 @@ impl Scope {
         }
     }
 
-    /// Add a user function (main scope only). Supports overloads and default params via (min_arity, max_arity).
+    /// Add a user function (main scope only). Supports overloads and default params via (`min_arity`, `max_arity`).
     pub fn add_function(&mut self, name: String, min_arity: usize, max_arity: usize, span: Span) {
         if let Some(f) = &mut self.functions {
             f.entry(name).or_default().push((min_arity, max_arity, span));
@@ -103,14 +106,16 @@ impl Scope {
         }
     }
 
+    #[must_use] 
     pub fn has_global(&self, name: &str) -> bool {
-        self.globals.as_ref().map_or(false, |g| g.contains(name))
+        self.globals.as_ref().is_some_and(|g| g.contains(name))
     }
 
     /// Whether any overload/default set for this name accepts the given argument count.
+    #[must_use] 
     pub fn function_accepts_arity(&self, name: &str, arity: usize) -> bool {
-        self.functions.as_ref().map_or(false, |f| {
-            f.get(name).map_or(false, |ranges| {
+        self.functions.as_ref().is_some_and(|f| {
+            f.get(name).is_some_and(|ranges| {
                 ranges
                     .iter()
                     .any(|(min, max, _)| *min <= arity && arity <= *max)
@@ -119,13 +124,15 @@ impl Scope {
     }
 
     /// First declaration span for a function in this scope (for duplicate diagnostic).
+    #[must_use] 
     pub fn get_function_first_span(&self, name: &str) -> Option<Span> {
         self.functions
             .as_ref()
             .and_then(|f| f.get(name).and_then(|v| v.first()).map(|(_, _, s)| *s))
     }
 
-    /// Span of an existing overload with the same (min_arity, max_arity), if any (for duplicate same-signature).
+    /// Span of an existing overload with the same (`min_arity`, `max_arity`), if any (for duplicate same-signature).
+    #[must_use] 
     pub fn get_function_span_for_arity_range(
         &self,
         name: &str,
@@ -143,21 +150,25 @@ impl Scope {
     }
 
     /// Legacy: single arity (for resolve symbol). Returns first range's max if any.
+    #[must_use] 
     pub fn get_function_arity(&self, name: &str) -> Option<usize> {
         self.functions
             .as_ref()
             .and_then(|f| f.get(name).and_then(|v| v.first()).map(|(_, max, _)| *max))
     }
 
+    #[must_use] 
     pub fn has_class(&self, name: &str) -> bool {
-        self.classes.as_ref().map_or(false, |c| c.contains_key(name))
+        self.classes.as_ref().is_some_and(|c| c.contains_key(name))
     }
 
     /// First declaration span for a class in this scope (for duplicate diagnostic).
+    #[must_use] 
     pub fn get_class_first_span(&self, name: &str) -> Option<Span> {
         self.classes.as_ref().and_then(|c| c.get(name).copied())
     }
 
+    #[must_use] 
     pub fn get_variable(&self, name: &str) -> Option<&VariableInfo> {
         self.variables.get(name)
     }
@@ -169,7 +180,14 @@ pub struct ScopeStore {
     scopes: Vec<Scope>,
 }
 
+impl Default for ScopeStore {
+    fn default() -> Self {
+        Self::new()
+    }
+}
+
 impl ScopeStore {
+    #[must_use] 
     pub fn new() -> Self {
         let mut store = Self {
             scopes: Vec::new(),
@@ -178,10 +196,12 @@ impl ScopeStore {
         store
     }
 
+    #[must_use] 
     pub fn root_id(&self) -> ScopeId {
         ScopeId(0)
     }
 
+    #[must_use] 
     pub fn get(&self, id: ScopeId) -> Option<&Scope> {
         self.scopes.get(id.0)
     }
@@ -204,7 +224,7 @@ impl ScopeStore {
     }
 
     /// Add a function to the root (main) scope. Used when seeding from signature files.
-    /// Pass `Span::new(0, 0)` when no source span is available. Optional params (type?) give min_arity < max_arity.
+    /// Pass `Span::new(0, 0)` when no source span is available. Optional params (type?) give `min_arity` < `max_arity`.
     pub fn add_root_function(&mut self, name: String, min_arity: usize, max_arity: usize, span: Span) {
         if let Some(root) = self.scopes.get_mut(0) {
             root.add_function(name, min_arity, max_arity, span);
@@ -220,6 +240,7 @@ impl ScopeStore {
     }
 
     /// Resolve a name: look in current scope and parents; also check main's functions and classes.
+    #[must_use] 
     pub fn resolve(&self, current: ScopeId, name: &str) -> Option<ResolvedSymbol> {
         let mut id = Some(current);
         while let Some(scope_id) = id {

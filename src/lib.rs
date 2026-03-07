@@ -1,6 +1,6 @@
 //! # leekscript-rs
 //!
-//! A LeekScript parser implemented with [sipha](https://docs.rs/sipha).
+//! A `LeekScript` parser implemented with [sipha](https://docs.rs/sipha).
 //!
 //! ## Utilities from sipha
 //!

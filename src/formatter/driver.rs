@@ -16,6 +16,7 @@ use super::options::FormatterOptions;
 /// Tokens are emitted in source order with no modifications. Skips the EOF sentinel token;
 /// trivia is included only when `options.preserve_comments` is true.
 /// Use [`FormatDriver`] with [`walk`](crate::walk) for custom walk-based formatting.
+#[must_use] 
 pub fn format(root: &SyntaxNode, options: &FormatterOptions) -> String {
     let emit_opts = EmitOptions {
         include_trivia: options.preserve_comments,
@@ -32,6 +33,7 @@ pub struct FormatDriver<'a> {
 }
 
 impl<'a> FormatDriver<'a> {
+    #[must_use] 
     pub fn new(options: &'a FormatterOptions) -> Self {
         Self {
             options,
@@ -39,6 +41,7 @@ impl<'a> FormatDriver<'a> {
         }
     }
 
+    #[must_use] 
     pub fn into_string(self) -> String {
         self.out
     }

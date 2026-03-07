@@ -27,7 +27,7 @@ pub fn add_expr_minimal(g: &mut sipha::builder::GrammarBuilder) {
 
 // ─── Program grammar: full expression precedence ───────────────────────────────
 
-/// Primary: literals, ident (and contextual keywords this/class via keyword_or_ident), new, (expr), [array], {object}.
+/// Primary: literals, ident (and contextual keywords this/class via `keyword_or_ident`), new, (expr), [array], {object}.
 pub fn add_primary(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("primary", |g: &mut sipha::builder::GrammarBuilder| {
         g.node(Kind::NodePrimaryExpr, |g| {
@@ -301,7 +301,7 @@ pub fn add_unary(g: &mut sipha::builder::GrammarBuilder) {
     });
 }
 
-/// Power: unary ** expr_power (right-associative) | unary
+/// Power: unary ** `expr_power` (right-associative) | unary
 pub fn add_expr_power(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("expr_power", |g: &mut sipha::builder::GrammarBuilder| {
         g.choices(vec![
@@ -317,7 +317,7 @@ pub fn add_expr_power(g: &mut sipha::builder::GrammarBuilder) {
     });
 }
 
-/// Mul: expr_power ( * / \ % expr_power )*
+/// Mul: `expr_power` ( * / \ % `expr_power` )*
 pub fn add_expr_mul(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("expr_mul", |g: &mut sipha::builder::GrammarBuilder| {
         g.call("expr_power");
@@ -335,7 +335,7 @@ pub fn add_expr_mul(g: &mut sipha::builder::GrammarBuilder) {
     });
 }
 
-/// Add: expr_mul ( + - expr_mul )*
+/// Add: `expr_mul` ( + - `expr_mul` )*
 pub fn add_expr_add(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("expr_add", |g: &mut sipha::builder::GrammarBuilder| {
         g.call("expr_mul");
@@ -351,7 +351,7 @@ pub fn add_expr_add(g: &mut sipha::builder::GrammarBuilder) {
     });
 }
 
-/// Interval: expr_add ( .. expr_interval )* (range, e.g. 1..10)
+/// Interval: `expr_add` ( .. `expr_interval` )* (range, e.g. 1..10)
 pub fn add_expr_interval(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("expr_interval", |g: &mut sipha::builder::GrammarBuilder| {
         g.call("expr_add");
@@ -364,7 +364,7 @@ pub fn add_expr_interval(g: &mut sipha::builder::GrammarBuilder) {
     });
 }
 
-/// Compare: expr_interval ( < <= > >= expr_interval )*
+/// Compare: `expr_interval` ( < <= > >= `expr_interval` )*
 pub fn add_expr_compare(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("expr_compare", |g: &mut sipha::builder::GrammarBuilder| {
         g.call("expr_interval");
@@ -382,7 +382,7 @@ pub fn add_expr_compare(g: &mut sipha::builder::GrammarBuilder) {
     });
 }
 
-/// Equality: expr_compare ( === !== == != expr_compare )*
+/// Equality: `expr_compare` ( === !== == != `expr_compare` )*
 pub fn add_expr_equality(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("expr_equality", |g: &mut sipha::builder::GrammarBuilder| {
         g.call("expr_compare");
@@ -399,7 +399,7 @@ pub fn add_expr_equality(g: &mut sipha::builder::GrammarBuilder) {
     });
 }
 
-/// In (membership): expr_equality ( in expr_equality )*
+/// In (membership): `expr_equality` ( in `expr_equality` )*
 pub fn add_expr_in(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("expr_in", |g: &mut sipha::builder::GrammarBuilder| {
         g.call("expr_equality");
@@ -412,7 +412,7 @@ pub fn add_expr_in(g: &mut sipha::builder::GrammarBuilder) {
     });
 }
 
-/// Instanceof: expr_in ( instanceof expr_equality )*
+/// Instanceof: `expr_in` ( instanceof `expr_equality` )*
 pub fn add_expr_instanceof(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("expr_instanceof", |g: &mut sipha::builder::GrammarBuilder| {
         g.call("expr_in");
@@ -425,7 +425,7 @@ pub fn add_expr_instanceof(g: &mut sipha::builder::GrammarBuilder) {
     });
 }
 
-/// And: expr_instanceof ( ( && | and ) expr_instanceof )*
+/// And: `expr_instanceof` ( ( && | and ) `expr_instanceof` )*
 pub fn add_expr_and(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("expr_and", |g: &mut sipha::builder::GrammarBuilder| {
         g.call("expr_instanceof");
@@ -441,7 +441,7 @@ pub fn add_expr_and(g: &mut sipha::builder::GrammarBuilder) {
     });
 }
 
-/// Or: expr_and ( ( || | or ) expr_and )*
+/// Or: `expr_and` ( ( || | or ) `expr_and` )*
 pub fn add_expr_or(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("expr_or", |g: &mut sipha::builder::GrammarBuilder| {
         g.call("expr_and");
@@ -457,7 +457,7 @@ pub fn add_expr_or(g: &mut sipha::builder::GrammarBuilder) {
     });
 }
 
-/// Xor: expr_or ( xor expr_xor )*
+/// Xor: `expr_or` ( xor `expr_xor` )*
 pub fn add_expr_xor(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("expr_xor", |g: &mut sipha::builder::GrammarBuilder| {
         g.call("expr_or");
@@ -470,7 +470,7 @@ pub fn add_expr_xor(g: &mut sipha::builder::GrammarBuilder) {
     });
 }
 
-/// Ternary: expr_xor ? expr : expr_ternary | expr_xor
+/// Ternary: `expr_xor` ? expr : `expr_ternary` | `expr_xor`
 pub fn add_expr_ternary(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("expr_ternary", |g: &mut sipha::builder::GrammarBuilder| {
         g.choices(vec![
@@ -536,7 +536,7 @@ pub fn add_type_params(g: &mut sipha::builder::GrammarBuilder) {
     });
 }
 
-/// Type primary: ident or ident `<` type_params (type_params already ends with `>`).
+/// Type primary: ident or ident `<` `type_params` (`type_params` already ends with `>`).
 /// Bare Array, Map, Set, Interval (no `<...>`) are valid shorthands for Array<any>, Map<any, any>, etc.
 pub fn add_type_primary(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("type_primary", |g: &mut sipha::builder::GrammarBuilder| {
@@ -548,7 +548,7 @@ pub fn add_type_primary(g: &mut sipha::builder::GrammarBuilder) {
     });
 }
 
-/// Type optional: type_primary `?`
+/// Type optional: `type_primary` `?`
 pub fn add_type_optional(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("type_optional", |g: &mut sipha::builder::GrammarBuilder| {
         g.call("type_primary");
@@ -556,7 +556,7 @@ pub fn add_type_optional(g: &mut sipha::builder::GrammarBuilder) {
     });
 }
 
-/// Type expr: type_optional ( `|` type_optional )*
+/// Type expr: `type_optional` ( `|` `type_optional` )*
 pub fn add_type_expr(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("type_expr", |g: &mut sipha::builder::GrammarBuilder| {
         g.node(Kind::NodeTypeExpr, |g| {
@@ -569,7 +569,7 @@ pub fn add_type_expr(g: &mut sipha::builder::GrammarBuilder) {
     });
 }
 
-/// As cast: expr_ternary ( as type_expr )*
+/// As cast: `expr_ternary` ( as `type_expr` )*
 pub fn add_expr_as(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("expr_as", |g: &mut sipha::builder::GrammarBuilder| {
         g.call("expr_ternary");
@@ -582,7 +582,7 @@ pub fn add_expr_as(g: &mut sipha::builder::GrammarBuilder) {
     });
 }
 
-/// Expr: assignment (postfix = expr) | expr_as
+/// Expr: assignment (postfix = expr) | `expr_as`
 pub fn add_expr(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("expr", |g: &mut sipha::builder::GrammarBuilder| {
         g.choices(vec![

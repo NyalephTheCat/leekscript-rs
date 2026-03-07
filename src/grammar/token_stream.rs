@@ -1,4 +1,4 @@
-//! Phase 1: token and token_stream parser rules.
+//! Phase 1: token and `token_stream` parser rules.
 
 use crate::syntax::Kind;
 

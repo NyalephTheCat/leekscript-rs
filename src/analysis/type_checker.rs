@@ -30,6 +30,7 @@ pub struct TypeChecker<'a> {
 }
 
 impl<'a> TypeChecker<'a> {
+    #[must_use] 
     pub fn new(store: &'a ScopeStore, root: &'a SyntaxNode) -> Self {
         Self {
             store,
@@ -157,9 +158,7 @@ impl Visitor for TypeChecker<'_> {
                         }
                         if let Some(exp) = expected {
                             let span = node
-                                .first_token()
-                                .map(|t| t.text_range())
-                                .unwrap_or_else(|| Span::new(0, 0));
+                                .first_token().map_or_else(|| Span::new(0, 0), |t| t.text_range());
                             self.diagnostics
                                 .push(wrong_arity_at(span, exp, actual_arity));
                         }
@@ -213,7 +212,7 @@ fn infer_primary_type(node: &SyntaxNode) -> Type {
             }
         }
         Some(Kind::TokString) => Type::string(),
-        Some(Kind::KwTrue) | Some(Kind::KwFalse) => Type::bool(),
+        Some(Kind::KwTrue | Kind::KwFalse) => Type::bool(),
         Some(Kind::KwNull) => Type::null(),
         _ => Type::any(),
     }

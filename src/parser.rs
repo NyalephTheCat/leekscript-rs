@@ -40,7 +40,7 @@ cached_grammar_fn!(expression_built_and_graph, build_expression_grammar);
 cached_grammar_fn!(program_built_and_graph, build_program_grammar);
 cached_grammar_fn!(signature_built_and_graph, build_signature_grammar);
 
-/// Single place for engine creation and parse; returns raw ParseOutput.
+/// Single place for engine creation and parse; returns raw `ParseOutput`.
 fn run_parse(
     source: &str,
     get_graph: fn() -> &'static BuiltAndGraph,
@@ -75,7 +75,7 @@ pub fn parse_tokens(source: &str) -> Result<ParseOutput, ParseError> {
 
 /// Parse source as a program (Phase 3/4: list of statements).
 ///
-/// Returns the program root node (NODE_ROOT with statement children).
+/// Returns the program root node (`NODE_ROOT` with statement children).
 /// For token stream only, use [`parse_tokens`].
 pub fn parse(source: &str) -> Result<Option<SyntaxNode>, ParseError> {
     parse_to_syntax_root(source, program_built_and_graph)
@@ -90,7 +90,7 @@ pub fn parse_expression(source: &str) -> Result<Option<SyntaxNode>, ParseError> 
 
 /// Parse source as a signature file (function/class/global declarations only).
 ///
-/// Returns the root node (NodeSigFile) whose children are sig items.
+/// Returns the root node (`NodeSigFile`) whose children are sig items.
 /// Use for loading stdlib or other API signature definitions.
 pub fn parse_signatures(source: &str) -> Result<Option<SyntaxNode>, ParseError> {
     parse_to_syntax_root(source, signature_built_and_graph)
@@ -103,7 +103,7 @@ pub fn parse_signatures(source: &str) -> Result<Option<SyntaxNode>, ParseError> 
 /// the parse produced no or invalid tree events.
 pub fn parse_to_doc(source: &str) -> Result<Option<ParsedDoc>, ParseError> {
     let out = parse_to_output(source, program_built_and_graph)?;
-    Ok(ParsedDoc::new(source.as_bytes().to_vec(), out))
+    Ok(ParsedDoc::new(source.as_bytes().to_vec(), &out))
 }
 
 /// Parse in recovering mode: on failure, returns the partial output and the error.
@@ -122,6 +122,7 @@ pub fn parse_recovering(source: &str) -> Result<ParseOutput, (ParseOutput, Parse
 ///
 /// Use with [`parse_error_to_miette`] so that "expected literal#n" in diagnostics
 /// is resolved to the actual token text (e.g. `"var"`, `"function"`).
+#[must_use] 
 pub fn program_literals() -> &'static sipha::insn::LiteralTable {
     &program_built_and_graph().1.literals
 }
@@ -129,6 +130,7 @@ pub fn program_literals() -> &'static sipha::insn::LiteralTable {
 /// Rule names for the program grammar (used for diagnostics).
 ///
 /// Use with [`parse_error_to_miette`] so that "expected rule#n" shows as the rule name.
+#[must_use] 
 pub fn program_rule_names() -> &'static [&'static str] {
     program_built_and_graph().1.rule_names
 }
@@ -155,6 +157,7 @@ pub fn reparse(
 }
 
 /// Expected labels for the program grammar (used for diagnostics).
+#[must_use] 
 pub fn program_expected_labels() -> &'static [&'static str] {
     program_built_and_graph().1.expected_labels
 }
@@ -168,6 +171,7 @@ pub fn program_expected_labels() -> &'static [&'static str] {
 /// Use when the error came from [`parse`]. For [`parse_expression`] or
 /// [`parse_tokens`], use the corresponding graph literals via sipha directly
 /// if you need miette reports.
+#[must_use] 
 pub fn parse_error_to_miette(
     e: &ParseError,
     source: &str,

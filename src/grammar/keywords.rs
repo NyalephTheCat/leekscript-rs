@@ -1,6 +1,6 @@
 //! Keyword and identifier lexer rules (longest keyword first).
 //!
-//! Keywords use a word boundary (neg_lookahead IDENT_CONT) so that e.g. "initial"
+//! Keywords use a word boundary (`neg_lookahead` `IDENT_CONT`) so that e.g. "initial"
 //! is parsed as one identifier, not "in" + "itial".
 
 use sipha::types::classes;
@@ -36,21 +36,21 @@ pub fn add_xor_kw(g: &mut sipha::builder::GrammarBuilder) {
     });
 }
 
-/// Lexer rule that matches only "abstract" (for class_decl).
+/// Lexer rule that matches only "abstract" (for `class_decl`).
 pub fn add_abstract_kw(g: &mut sipha::builder::GrammarBuilder) {
     g.lexer_rule("abstract_kw", |g| {
         kw(g, Kind::KwAbstract, b"abstract");
     });
 }
 
-/// Lexer rule that matches only "constructor" (for class_decl).
+/// Lexer rule that matches only "constructor" (for `class_decl`).
 pub fn add_constructor_kw(g: &mut sipha::builder::GrammarBuilder) {
     g.lexer_rule("constructor_kw", |g| {
         kw(g, Kind::KwConstructor, b"constructor");
     });
 }
 
-/// Lexer rule that matches only "extends" (for class_decl).
+/// Lexer rule that matches only "extends" (for `class_decl`).
 pub fn add_extends_kw(g: &mut sipha::builder::GrammarBuilder) {
     g.lexer_rule("extends_kw", |g| {
         kw(g, Kind::KwExtends, b"extends");

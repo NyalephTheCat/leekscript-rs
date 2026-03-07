@@ -1,4 +1,4 @@
-//! LeekScript grammar built with sipha.
+//! `LeekScript` grammar built with sipha.
 //!
 //! Phase 1: token stream (lexer).
 //! Phases 2–4: expressions, statements, top-level.
@@ -16,7 +16,8 @@ mod trivia;
 
 use sipha::prelude::*;
 
-/// Build the LeekScript grammar (Phase 1: token stream).
+/// Build the `LeekScript` grammar (Phase 1: token stream).
+#[must_use] 
 pub fn build_grammar() -> sipha::builder::BuiltGraph {
     let mut g = GrammarBuilder::new();
     g.set_trivia_rule("ws");
@@ -47,6 +48,7 @@ pub fn build_grammar() -> sipha::builder::BuiltGraph {
 
 /// Build a grammar that parses a single expression (Phase 2).
 /// Start rule is "start" → ws expr ws eof.
+#[must_use] 
 pub fn build_expression_grammar() -> sipha::builder::BuiltGraph {
     let mut g = GrammarBuilder::new();
     g.set_trivia_rule("ws");
@@ -72,6 +74,7 @@ pub fn build_expression_grammar() -> sipha::builder::BuiltGraph {
 
 /// Build a grammar that parses a program (Phase 3/4: list of statements).
 /// Start rule is "start" → node(NodeRoot, ws program ws eof) so the parse tree has a single root.
+#[must_use] 
 pub fn build_program_grammar() -> sipha::builder::BuiltGraph {
     let mut g = GrammarBuilder::new();
     g.set_trivia_rule("ws");

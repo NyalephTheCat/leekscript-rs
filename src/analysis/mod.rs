@@ -29,12 +29,14 @@ pub struct AnalysisResult {
 }
 
 impl AnalysisResult {
+    #[must_use] 
     pub fn has_errors(&self) -> bool {
         self.diagnostics
             .iter()
             .any(|d| d.severity == sipha::error::Severity::Error)
     }
 
+    #[must_use] 
     pub fn is_valid(&self) -> bool {
         !self.has_errors()
     }
@@ -42,8 +44,9 @@ impl AnalysisResult {
 
 /// Build scope from the tree and run validation. Returns diagnostics and the scope store.
 ///
-/// Pass order: (1) ScopeBuilder runs first and builds the scope store and scope ID sequence.
-/// (2) Validator and (3) TypeChecker then use that store so resolution and type checking see the same scopes.
+/// Pass order: (1) `ScopeBuilder` runs first and builds the scope store and scope ID sequence.
+/// (2) Validator and (3) `TypeChecker` then use that store so resolution and type checking see the same scopes.
+#[must_use] 
 pub fn analyze(root: &SyntaxNode) -> AnalysisResult {
     let options = WalkOptions::nodes_only();
     let mut builder = ScopeBuilder::new();
@@ -120,7 +123,7 @@ fn sig_class_name(node: &SyntaxNode) -> Option<String> {
     tokens.first().map(|t| t.text().to_string())
 }
 
-/// Returns (name, min_arity, max_arity). Params with "?" after the name (omittable) count toward max_arity only.
+/// Returns (name, `min_arity`, `max_arity`). Params with "?" after the name (omittable) count toward `max_arity` only.
 fn sig_function_info(node: &SyntaxNode) -> Option<(String, usize, usize)> {
     let tokens: Vec<_> = node
         .descendant_tokens()
@@ -142,7 +145,8 @@ fn sig_function_info(node: &SyntaxNode) -> Option<(String, usize, usize)> {
 
 /// Analyze the program with the root scope pre-seeded from signature files (e.g. stdlib constants and functions).
 /// This allows references to global constants and built-in functions to resolve without errors.
-/// Also seeds built-in type/class names (e.g. `Class`, `bool`) so that common LeekScript code validates.
+/// Also seeds built-in type/class names (e.g. `Class`, `bool`) so that common `LeekScript` code validates.
+#[must_use] 
 pub fn analyze_with_signatures(
     program_root: &SyntaxNode,
     signature_roots: &[SyntaxNode],

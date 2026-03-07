@@ -1,4 +1,4 @@
-//! Syntax and token kinds for the LeekScript grammar.
+//! Syntax and token kinds for the `LeekScript` grammar.
 //!
 //! Uses an enum with [`sipha::SyntaxKinds`] so discriminants are 0, 1, 2, … automatically.
 
@@ -141,7 +141,7 @@ pub fn kind_name(kind: sipha::types::SyntaxKind) -> &'static str {
     if kind == SYNTHETIC_ROOT {
         return "ROOT";
     }
-    Kind::from_syntax_kind(kind).map(kind_name_enum).unwrap_or("?")
+    Kind::from_syntax_kind(kind).map_or("?", kind_name_enum)
 }
 
 fn kind_name_enum(k: Kind) -> &'static str {

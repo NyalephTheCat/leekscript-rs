@@ -13,20 +13,21 @@ use super::node_helpers::{class_decl_info, for_in_loop_vars, function_decl_info,
 use super::scope::{ScopeId, ScopeKind, ScopeStore};
 
 /// Collects diagnostics and maintains scope stack (replaying scope structure from first pass).
-/// Uses the same scope ID sequence as ScopeBuilder so resolve() looks up the correct scope.
+/// Uses the same scope ID sequence as `ScopeBuilder` so `resolve()` looks up the correct scope.
 pub struct Validator<'a> {
     pub store: &'a ScopeStore,
     stack: Vec<ScopeId>,
     /// Names declared in the current scope (for duplicate detection).
     declared_in_scope: Vec<HashSet<String>>,
-    /// Index into scope_id_sequence for the next push.
+    /// Index into `scope_id_sequence` for the next push.
     scope_id_index: usize,
-    /// Scope IDs in walk order (from ScopeBuilder) so we push the same IDs.
+    /// Scope IDs in walk order (from `ScopeBuilder`) so we push the same IDs.
     scope_id_sequence: &'a [ScopeId],
     pub diagnostics: Vec<SemanticDiagnostic>,
 }
 
 impl<'a> Validator<'a> {
+    #[must_use] 
     pub fn new(store: &'a ScopeStore, scope_id_sequence: &'a [ScopeId]) -> Self {
         Self {
             store,
@@ -79,14 +80,14 @@ impl<'a> Validator<'a> {
         self.stack.iter().rev().any(|&id| {
             self.store
                 .get(id)
-                .map_or(false, |s| s.kind == ScopeKind::Loop)
+                .is_some_and(|s| s.kind == ScopeKind::Loop)
         })
     }
 
     /// True when we're in the main program block (not inside a function or class body).
     fn in_main_block(&self) -> bool {
         self.stack.iter().all(|&id| {
-            self.store.get(id).map_or(true, |s| {
+            self.store.get(id).is_none_or(|s| {
                 s.kind == ScopeKind::Main || s.kind == ScopeKind::Block
             })
         })
@@ -96,14 +97,14 @@ impl<'a> Validator<'a> {
     fn in_function_scope(&self) -> bool {
         self.stack
             .iter()
-            .any(|&id| self.store.get(id).map_or(false, |s| s.kind == ScopeKind::Function))
+            .any(|&id| self.store.get(id).is_some_and(|s| s.kind == ScopeKind::Function))
     }
 
     /// True when we're inside a class body (method or constructor).
     fn in_class_scope(&self) -> bool {
         self.stack
             .iter()
-            .any(|&id| self.store.get(id).map_or(false, |s| s.kind == ScopeKind::Class))
+            .any(|&id| self.store.get(id).is_some_and(|s| s.kind == ScopeKind::Class))
     }
 
     /// True when we're inside a method (function scope whose parent chain includes a class).

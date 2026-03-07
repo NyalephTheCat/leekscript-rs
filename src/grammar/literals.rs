@@ -37,7 +37,7 @@ pub fn add_string_lit(g: &mut sipha::builder::GrammarBuilder) {
     });
 }
 
-/// Escape sequence (used by string_lit).
+/// Escape sequence (used by `string_lit`).
 pub fn add_escape(g: &mut sipha::builder::GrammarBuilder) {
     g.lexer_rule("escape", |g| {
         g.byte(b'\\');

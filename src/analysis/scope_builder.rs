@@ -18,6 +18,7 @@ pub struct ScopeBuilder {
 }
 
 impl ScopeBuilder {
+    #[must_use] 
     pub fn new() -> Self {
         let store = ScopeStore::new();
         let stack = vec![store.root_id()];
@@ -29,6 +30,7 @@ impl ScopeBuilder {
     }
 
     /// Build scope from a program tree using an existing store (e.g. pre-seeded from signature files).
+    #[must_use] 
     pub fn with_store(store: ScopeStore) -> Self {
         let root_id = store.root_id();
         Self {
@@ -64,7 +66,7 @@ impl ScopeBuilder {
         self.stack.iter().any(|&id| {
             self.store
                 .get(id)
-                .map_or(false, |s| s.kind == ScopeKind::Class)
+                .is_some_and(|s| s.kind == ScopeKind::Class)
         })
     }
 }

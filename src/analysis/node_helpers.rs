@@ -1,4 +1,4 @@
-//! Helpers to extract names and structure from syntax nodes (VarDecl, FunctionDecl, ClassDecl, etc.).
+//! Helpers to extract names and structure from syntax nodes (`VarDecl`, `FunctionDecl`, `ClassDecl`, etc.).
 
 use sipha::red::{SyntaxElement, SyntaxNode, SyntaxToken};
 use sipha::types::Span;
@@ -16,7 +16,7 @@ pub enum VarDeclKind {
     Typed,
 }
 
-/// Info extracted from a NodeVarDecl (var/global/const/let or typed).
+/// Info extracted from a `NodeVarDecl` (var/global/const/let or typed).
 pub struct VarDeclInfo {
     pub kind: VarDeclKind,
     pub name: String,
@@ -56,6 +56,7 @@ fn idents_before_assign(
 
 /// Returns the right-hand side expression of a `NodeBinaryExpr` when the grammar labels it (e.g. mul-level `a * b`).
 /// Uses the named field "rhs" so structure is stable regardless of child order.
+#[must_use] 
 pub fn binary_expr_rhs(node: &SyntaxNode) -> Option<SyntaxNode> {
     if node.kind_as::<Kind>() != Some(Kind::NodeBinaryExpr) {
         return None;
@@ -63,7 +64,7 @@ pub fn binary_expr_rhs(node: &SyntaxNode) -> Option<SyntaxNode> {
     node.field_by_id(FIELD_RHS)
 }
 
-/// Returns the declaration kind and name from a NodeVarDecl.
+/// Returns the declaration kind and name from a `NodeVarDecl`.
 /// For "var x", "global T x": name is the first identifier after the keyword.
 /// For typed form "Array<EffectOverTime> arr" or "integer? y": name is the *last* identifier before "=" (type names come first).
 pub fn var_decl_info(node: &SyntaxNode) -> Option<VarDeclInfo> {
@@ -90,7 +91,7 @@ pub fn var_decl_info(node: &SyntaxNode) -> Option<VarDeclInfo> {
     })
 }
 
-/// Info extracted from a NodeFunctionDecl (name and parameter counts).
+/// Info extracted from a `NodeFunctionDecl` (name and parameter counts).
 pub struct FunctionDeclInfo {
     pub name: String,
     pub name_span: Span,
@@ -102,7 +103,7 @@ pub struct FunctionDeclInfo {
     pub max_arity: usize,
 }
 
-/// Returns true if this NodeParam has a default value (`= expr`).
+/// Returns true if this `NodeParam` has a default value (`= expr`).
 pub fn param_has_default(node: &SyntaxNode) -> bool {
     if node.kind_as::<Kind>() != Some(Kind::NodeParam) {
         return false;
@@ -112,8 +113,8 @@ pub fn param_has_default(node: &SyntaxNode) -> bool {
         .any(|t| t.text() == "=")
 }
 
-/// Returns name and parameter counts from a NodeFunctionDecl.
-/// For default parameters, min_arity is the number of required params; max_arity is total.
+/// Returns name and parameter counts from a `NodeFunctionDecl`.
+/// For default parameters, `min_arity` is the number of required params; `max_arity` is total.
 pub fn function_decl_info(node: &SyntaxNode) -> Option<FunctionDeclInfo> {
     if node.kind_as::<Kind>() != Some(Kind::NodeFunctionDecl) {
         return None;
@@ -141,13 +142,13 @@ pub fn function_decl_info(node: &SyntaxNode) -> Option<FunctionDeclInfo> {
     })
 }
 
-/// Info extracted from a NodeClassDecl (name only for scope).
+/// Info extracted from a `NodeClassDecl` (name only for scope).
 pub struct ClassDeclInfo {
     pub name: String,
     pub name_span: Span,
 }
 
-/// Returns class name from a NodeClassDecl.
+/// Returns class name from a `NodeClassDecl`.
 pub fn class_decl_info(node: &SyntaxNode) -> Option<ClassDeclInfo> {
     if node.kind_as::<Kind>() != Some(Kind::NodeClassDecl) {
         return None;
@@ -162,7 +163,7 @@ pub fn class_decl_info(node: &SyntaxNode) -> Option<ClassDeclInfo> {
 }
 
 /// If the node is or contains a simple identifier (single identifier token),
-/// returns its text and span. Handles NodeExpr and NodePrimaryExpr (expr may not wrap in NodeExpr in the grammar).
+/// returns its text and span. Handles `NodeExpr` and `NodePrimaryExpr` (expr may not wrap in `NodeExpr` in the grammar).
 pub fn expr_identifier(node: &SyntaxNode) -> Option<(String, Span)> {
     let kind = node.kind_as::<Kind>()?;
     if kind != Kind::NodeExpr && kind != Kind::NodePrimaryExpr {
@@ -185,8 +186,8 @@ pub fn is_identifier_expr(node: &SyntaxNode) -> bool {
     expr_identifier(node).is_some()
 }
 
-/// Variable name(s) and span(s) from a NodeForInStmt: key and optionally value (for key : valueVar in expr).
-/// Skips type_expr nodes and for/var/in/paren tokens so we get only the loop variable identifiers.
+/// Variable name(s) and span(s) from a `NodeForInStmt`: key and optionally value (for key : valueVar in expr).
+/// Skips `type_expr` nodes and for/var/in/paren tokens so we get only the loop variable identifiers.
 pub fn for_in_loop_vars(node: &SyntaxNode) -> Vec<(String, Span)> {
     if node.kind_as::<Kind>() != Some(Kind::NodeForInStmt) {
         return Vec::new();
@@ -241,7 +242,7 @@ pub fn for_in_loop_vars(node: &SyntaxNode) -> Vec<(String, Span)> {
     vars
 }
 
-/// Parameter name and span from a NodeParam (for scope building).
+/// Parameter name and span from a `NodeParam` (for scope building).
 pub fn param_name(node: &SyntaxNode) -> Option<(String, Span)> {
     if node.kind_as::<Kind>() != Some(Kind::NodeParam) {
         return None;

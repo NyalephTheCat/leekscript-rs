@@ -108,7 +108,7 @@ pub fn add_lparen_rparen(g: &mut sipha::builder::GrammarBuilder) {
 // ─── Program grammar: separate rules for expression parsing ───────────────────
 
 /// Single brackets and punctuation used by program/expression grammar.
-/// Note: dot_dot ("..") must be defined before dot (".") so interval parses correctly.
+/// Note: `dot_dot` ("..") must be defined before dot (".") so interval parses correctly.
 pub fn add_program_brackets(g: &mut sipha::builder::GrammarBuilder) {
     g.lexer_rule("lparen", |g| { g.token(Kind::TokParenL, |g| { g.byte(b'('); }); });
     g.lexer_rule("rparen", |g| { g.token(Kind::TokParenR, |g| { g.byte(b')'); }); });

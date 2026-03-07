@@ -1,4 +1,4 @@
-//! LeekScript tree printer.
+//! `LeekScript` tree printer.
 //!
 //! Prints the syntax tree by emitting tokens in source order without modifying the tree.
 //! Use [`format`] with a root [`sipha::red::SyntaxNode`] and [`FormatterOptions`].

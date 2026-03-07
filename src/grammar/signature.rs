@@ -1,7 +1,7 @@
-//! Grammar for LeekScript **signature files** (stdlib / API declarations).
+//! Grammar for `LeekScript` **signature files** (stdlib / API declarations).
 //!
 //! This is a small DSL to declare function, class, and global signatures without
-//! LeekScript bodies. Used to load standard library (and other) API definitions.
+//! `LeekScript` bodies. Used to load standard library (and other) API definitions.
 //!
 //! ## Format (BNF-style)
 //!
@@ -30,7 +30,7 @@
 //!                  | "(" type_expr ("," type_expr)* ")" "=>" type_expr
 //! ```
 //!
-//! Types match LeekScript: `integer`, `real`, `string`, `boolean`, `void`, `any`,
+//! Types match `LeekScript`: `integer`, `real`, `string`, `boolean`, `void`, `any`,
 //! `Array<T>`, `Map<K,V>`, `Set<T>`, `Function<P1, P2, ... => R>`, `(T1, T2) => R`, `T | U`, `T?`.
 //! Shorthand: `Array`, `Map`, `Set` (no params) = `Array<any>`, `Map<any, any>`, `Set<any>`.
 //! Function type: `Function< => ret>` (0 params) or `Function<a, b => ret>` (param types, then `=>`, then return type).
@@ -148,7 +148,7 @@ fn add_sig_type_params(g: &mut sipha::builder::GrammarBuilder) {
     });
 }
 
-/// type_primary: ident or ident `<` type_params `>`
+/// `type_primary`: ident or ident `<` `type_params` `>`
 fn add_sig_type_primary(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("sig_type_primary", |g| {
         g.call("sig_ident");
@@ -159,7 +159,7 @@ fn add_sig_type_primary(g: &mut sipha::builder::GrammarBuilder) {
     });
 }
 
-/// type_optional: type_primary `?`?
+/// `type_optional`: `type_primary` `?`?
 fn add_sig_type_optional(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("sig_type_optional", |g| {
         g.call("sig_type_primary");
@@ -167,7 +167,7 @@ fn add_sig_type_optional(g: &mut sipha::builder::GrammarBuilder) {
     });
 }
 
-/// type_expr: type_optional ( `|` type_optional )*
+/// `type_expr`: `type_optional` ( `|` `type_optional` )*
 fn add_sig_type_expr(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("sig_type_expr", |g| {
         g.node(Kind::NodeTypeExpr, |g| {
@@ -180,7 +180,7 @@ fn add_sig_type_expr(g: &mut sipha::builder::GrammarBuilder) {
     });
 }
 
-/// param: type_expr ident ["?"]  — "?" after name means argument can be omitted (not type|null)
+/// param: `type_expr` ident ["?"]  — "?" after name means argument can be omitted (not type|null)
 fn add_sig_param(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("sig_param", |g| {
         g.node(Kind::NodeSigParam, |g| {
@@ -191,7 +191,7 @@ fn add_sig_param(g: &mut sipha::builder::GrammarBuilder) {
     });
 }
 
-/// param_list: [param ("," param)*]
+/// `param_list`: [param ("," param)*]
 fn add_sig_param_list(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("sig_param_list", |g| {
         g.optional(|g| {
@@ -204,7 +204,7 @@ fn add_sig_param_list(g: &mut sipha::builder::GrammarBuilder) {
     });
 }
 
-/// function_sig: "function" ident "(" param_list ")" ["->" type_expr]
+/// `function_sig`: "function" ident "(" `param_list` ")" ["->" `type_expr`]
 fn add_sig_function(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("sig_function", |g| {
         g.node(Kind::NodeSigFunction, |g| {
@@ -221,7 +221,7 @@ fn add_sig_function(g: &mut sipha::builder::GrammarBuilder) {
     });
 }
 
-/// constructor_sig: "constructor" "(" param_list ")"
+/// `constructor_sig`: "constructor" "(" `param_list` ")"
 fn add_sig_constructor(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("sig_constructor", |g| {
         g.node(Kind::NodeSigConstructor, |g| {
@@ -233,7 +233,7 @@ fn add_sig_constructor(g: &mut sipha::builder::GrammarBuilder) {
     });
 }
 
-/// method_sig: ["static"] ["public"|"private"|"protected"] type_expr ident "(" param_list ")"
+/// `method_sig`: ["static"] ["public"|"private"|"protected"] `type_expr` ident "(" `param_list` ")"
 fn add_sig_method(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("sig_method", |g| {
         g.node(Kind::NodeSigMethod, |g| {
@@ -254,7 +254,7 @@ fn add_sig_method(g: &mut sipha::builder::GrammarBuilder) {
     });
 }
 
-/// field_sig: ["static"] ["final"] type_expr ident
+/// `field_sig`: ["static"] ["final"] `type_expr` ident
 fn add_sig_field(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("sig_field", |g| {
         g.node(Kind::NodeSigField, |g| {
@@ -266,7 +266,7 @@ fn add_sig_field(g: &mut sipha::builder::GrammarBuilder) {
     });
 }
 
-/// class_member: method_sig | constructor_sig | field_sig
+/// `class_member`: `method_sig` | `constructor_sig` | `field_sig`
 fn add_sig_class_member(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("sig_class_member", |g| {
         g.choices(vec![
@@ -277,7 +277,7 @@ fn add_sig_class_member(g: &mut sipha::builder::GrammarBuilder) {
     });
 }
 
-/// class_sig: "class" ident ["extends" ident] "{" class_member* "}"
+/// `class_sig`: "class" ident ["extends" ident] "{" `class_member`* "}"
 fn add_sig_class(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("sig_class", |g| {
         g.node(Kind::NodeSigClass, |g| {
@@ -294,7 +294,7 @@ fn add_sig_class(g: &mut sipha::builder::GrammarBuilder) {
     });
 }
 
-/// global_sig: "global" type_expr ident
+/// `global_sig`: "global" `type_expr` ident
 fn add_sig_global(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("sig_global", |g| {
         g.node(Kind::NodeSigGlobal, |g| {
@@ -305,7 +305,7 @@ fn add_sig_global(g: &mut sipha::builder::GrammarBuilder) {
     });
 }
 
-/// Top-level item: function_sig | class_sig | global_sig
+/// Top-level item: `function_sig` | `class_sig` | `global_sig`
 fn add_sig_item(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("sig_item", |g| {
         g.choices(vec![
@@ -316,7 +316,7 @@ fn add_sig_item(g: &mut sipha::builder::GrammarBuilder) {
     });
 }
 
-/// file: sig_item*
+/// file: `sig_item`*
 fn add_sig_file(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("sig_file", |g| {
         g.node(Kind::NodeSigFile, |g| {
@@ -326,7 +326,8 @@ fn add_sig_file(g: &mut sipha::builder::GrammarBuilder) {
 }
 
 /// Build the signature file grammar.
-/// Start rule: `start` → ws sig_file ws eof.
+/// Start rule: `start` → ws `sig_file` ws eof.
+#[must_use] 
 pub fn build_signature_grammar() -> sipha::builder::BuiltGraph {
     let mut g = sipha::builder::GrammarBuilder::new();
     g.set_trivia_rule("ws");
