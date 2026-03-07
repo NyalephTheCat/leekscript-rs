@@ -55,14 +55,15 @@ fn idents_before_assign(
     false
 }
 
-/// Returns the right-hand side expression of a `NodeBinaryExpr` when the grammar labels it (e.g. mul-level `a * b`).
-/// Uses the named field "rhs" so structure is stable regardless of child order.
-#[must_use] 
+/// Returns the right-hand side expression of a `NodeBinaryExpr`.
+/// Prefers the named field "rhs" when present (legacy mul-level); otherwise uses the last node child
+/// (sipha precedence climbing produces [op, lower] so RHS is the last node).
+#[must_use]
 pub fn binary_expr_rhs(node: &SyntaxNode) -> Option<SyntaxNode> {
     if node.kind_as::<Kind>() != Some(Kind::NodeBinaryExpr) {
         return None;
     }
-    node.field_by_id(FIELD_RHS)
+    node.field_by_id(FIELD_RHS).or_else(|| node.child_nodes().last())
 }
 
 /// Returns the member name (identifier after the dot) from a `NodeMemberExpr`.

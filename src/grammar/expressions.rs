@@ -2,8 +2,11 @@
 //!
 //! Minimal (expression grammar): primary only.
 //! Full (program grammar): precedence levels from primary up to assignment.
+//! Uses sipha's precedence helpers (expr::left_assoc_infix_level, right_assoc_infix_level)
+//! where applicable; levels that need a NodeBinaryLevel wrapper use a local helper.
 
 use crate::syntax::Kind;
+use sipha::expr;
 
 // ─── Expression grammar (Phase 2): primary only ──────────────────────────────
 
@@ -301,62 +304,40 @@ pub fn add_unary(g: &mut sipha::builder::GrammarBuilder) {
     });
 }
 
-/// Power: unary ** `expr_power` (right-associative) | unary
-pub fn add_expr_power(g: &mut sipha::builder::GrammarBuilder) {
-    g.parser_rule("expr_power", |g: &mut sipha::builder::GrammarBuilder| {
-        g.choices(vec![
-            Box::new(|g| {
-                g.node(Kind::NodeBinaryExpr, |g| {
-                    g.call("unary");
-                    g.call("op_power");
-                    g.call("expr_power");
-                });
-            }),
-            Box::new(|g| { g.call("unary"); }),
-        ]);
-    });
-}
+// ─── Precedence helpers (wrap sipha's pattern in NodeBinaryLevel where needed) ──
 
-/// Mul: `expr_power` ( * / \ % `expr_power` )*
-pub fn add_expr_mul(g: &mut sipha::builder::GrammarBuilder) {
-    g.parser_rule("expr_mul", |g: &mut sipha::builder::GrammarBuilder| {
+/// Left-associative infix level wrapped in NodeBinaryLevel so the rule produces a single node.
+/// Each (op, lower) pair is wrapped in NodeBinaryExpr with children [op, lower].
+fn left_assoc_level_with_wrapper(
+    g: &mut sipha::builder::GrammarBuilder,
+    level_name: &'static str,
+    lower_level_name: &'static str,
+    ops: &[&'static str],
+) {
+    g.parser_rule(level_name, |g: &mut sipha::builder::GrammarBuilder| {
         g.node(Kind::NodeBinaryLevel, |g| {
-            g.call("expr_power");
-            g.zero_or_more(|g| {
+            g.call(lower_level_name);
+            g.zero_or_more(move |g| {
                 g.node(Kind::NodeBinaryExpr, |g| {
-                    g.choices(vec![
-                        Box::new(|g| { g.call("op_star"); }),
-                        Box::new(|g| { g.call("op_slash"); }),
-                        Box::new(|g| { g.call("op_backslash"); }),
-                        Box::new(|g| { g.call("op_percent"); }),
-                    ]);
-                    g.node_with_field(Kind::NodeExpr, "rhs", |g| { g.call("expr_power"); });
+                    let mut choices: Vec<Box<dyn FnOnce(&mut sipha::builder::GrammarBuilder)>> =
+                        Vec::new();
+                    for op in ops {
+                        let op = *op;
+                        let lower = lower_level_name;
+                        choices.push(Box::new(move |g| {
+                            g.call(op);
+                            g.call(lower);
+                        }));
+                    }
+                    g.choices(choices);
                 });
             });
         });
     });
 }
 
-/// Add: `expr_mul` ( + - `expr_mul` )*
-pub fn add_expr_add(g: &mut sipha::builder::GrammarBuilder) {
-    g.parser_rule("expr_add", |g: &mut sipha::builder::GrammarBuilder| {
-        g.node(Kind::NodeBinaryLevel, |g| {
-            g.call("expr_mul");
-            g.zero_or_more(|g| {
-                g.node(Kind::NodeBinaryExpr, |g| {
-                    g.choices(vec![
-                        Box::new(|g| { g.call("op_plus"); }),
-                        Box::new(|g| { g.call("op_minus"); }),
-                    ]);
-                    g.call("expr_mul");
-                });
-            });
-        });
-    });
-}
-
-/// Interval: `expr_add` ( .. `expr_interval` )* (range, e.g. 1..10)
-pub fn add_expr_interval(g: &mut sipha::builder::GrammarBuilder) {
+/// Interval level: expr_add ( .. expr_interval )* with NodeInterval for each (.. rhs).
+fn left_assoc_interval_level(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("expr_interval", |g: &mut sipha::builder::GrammarBuilder| {
         g.node(Kind::NodeBinaryLevel, |g| {
             g.call("expr_add");
@@ -370,120 +351,85 @@ pub fn add_expr_interval(g: &mut sipha::builder::GrammarBuilder) {
     });
 }
 
-/// Compare: `expr_interval` ( < <= > >= `expr_interval` )*
+/// Power: unary ** expr_power (right-associative) | unary (sipha precedence climbing).
+pub fn add_expr_power(g: &mut sipha::builder::GrammarBuilder) {
+    expr::right_assoc_infix_level(g, "expr_power", "unary", "op_power", &Kind::NodeBinaryExpr);
+}
+
+/// Mul: expr_power ( * / \ % expr_power )* with NodeBinaryLevel wrapper (sipha precedence + wrapper).
+pub fn add_expr_mul(g: &mut sipha::builder::GrammarBuilder) {
+    left_assoc_level_with_wrapper(
+        g,
+        "expr_mul",
+        "expr_power",
+        &["op_star", "op_slash", "op_backslash", "op_percent"],
+    );
+}
+
+/// Add: expr_mul ( + - expr_mul )* (sipha precedence + wrapper).
+pub fn add_expr_add(g: &mut sipha::builder::GrammarBuilder) {
+    left_assoc_level_with_wrapper(g, "expr_add", "expr_mul", &["op_plus", "op_minus"]);
+}
+
+/// Interval: expr_add ( .. expr_interval )* (range); uses NodeInterval for each (.. rhs).
+pub fn add_expr_interval(g: &mut sipha::builder::GrammarBuilder) {
+    left_assoc_interval_level(g);
+}
+
+/// Compare: expr_interval ( < <= > >= expr_interval )* (sipha left_assoc_infix_level, no wrapper).
 pub fn add_expr_compare(g: &mut sipha::builder::GrammarBuilder) {
-    g.parser_rule("expr_compare", |g: &mut sipha::builder::GrammarBuilder| {
-        g.call("expr_interval");
-        g.zero_or_more(|g| {
-            g.node(Kind::NodeBinaryExpr, |g| {
-                g.choices(vec![
-                    Box::new(|g| { g.call("op_le"); }),
-                    Box::new(|g| { g.call("op_ge"); }),
-                    Box::new(|g| { g.call("op_lt"); }),
-                    Box::new(|g| { g.call("op_gt"); }),
-                ]);
-                g.call("expr_interval");
-            });
-        });
-    });
+    expr::left_assoc_infix_level(
+        g,
+        "expr_compare",
+        "expr_interval",
+        &["op_le", "op_ge", "op_lt", "op_gt"],
+        &Kind::NodeBinaryExpr,
+    );
 }
 
-/// Equality: `expr_compare` ( === !== == != `expr_compare` )*
+/// Equality: expr_compare ( === !== == != expr_compare )* (sipha precedence + wrapper).
 pub fn add_expr_equality(g: &mut sipha::builder::GrammarBuilder) {
-    g.parser_rule("expr_equality", |g: &mut sipha::builder::GrammarBuilder| {
-        g.node(Kind::NodeBinaryLevel, |g| {
-            g.call("expr_compare");
-            g.zero_or_more(|g| {
-                g.node(Kind::NodeBinaryExpr, |g| {
-                    g.choices(vec![
-                        Box::new(|g| { g.call("op_strict_eq"); }),
-                        Box::new(|g| { g.call("op_neq_or_strict"); }),
-                        Box::new(|g| { g.call("op_eq"); }),
-                    ]);
-                    g.call("expr_compare");
-                });
-            });
-        });
-    });
+    left_assoc_level_with_wrapper(
+        g,
+        "expr_equality",
+        "expr_compare",
+        &["op_strict_eq", "op_neq_or_strict", "op_eq"],
+    );
 }
 
-/// In (membership): `expr_equality` ( in `expr_equality` )*
+/// In (membership): expr_equality ( in expr_equality )* (sipha left_assoc_infix_level, no wrapper).
 pub fn add_expr_in(g: &mut sipha::builder::GrammarBuilder) {
-    g.parser_rule("expr_in", |g: &mut sipha::builder::GrammarBuilder| {
-        g.call("expr_equality");
-        g.zero_or_more(|g| {
-            g.node(Kind::NodeBinaryExpr, |g| {
-                g.call("in_kw");
-                g.call("expr_equality");
-            });
-        });
-    });
+    expr::left_assoc_infix_level(g, "expr_in", "expr_equality", &["in_kw"], &Kind::NodeBinaryExpr);
 }
 
-/// Instanceof: `expr_in` ( instanceof `expr_equality` )*
+/// Instanceof: expr_in ( instanceof expr_equality )* (sipha precedence + wrapper).
 pub fn add_expr_instanceof(g: &mut sipha::builder::GrammarBuilder) {
-    g.parser_rule("expr_instanceof", |g: &mut sipha::builder::GrammarBuilder| {
-        g.node(Kind::NodeBinaryLevel, |g| {
-            g.call("expr_in");
-            g.zero_or_more(|g| {
-                g.node(Kind::NodeBinaryExpr, |g| {
-                    g.call("instanceof_kw");
-                    g.call("expr_equality");
-                });
-            });
-        });
-    });
+    left_assoc_level_with_wrapper(
+        g,
+        "expr_instanceof",
+        "expr_in",
+        &["instanceof_kw"],
+    );
 }
 
-/// And: `expr_instanceof` ( ( && | and ) `expr_instanceof` )*
+/// And: expr_instanceof ( && | and expr_instanceof )* (sipha precedence + wrapper).
 pub fn add_expr_and(g: &mut sipha::builder::GrammarBuilder) {
-    g.parser_rule("expr_and", |g: &mut sipha::builder::GrammarBuilder| {
-        g.node(Kind::NodeBinaryLevel, |g| {
-            g.call("expr_instanceof");
-            g.zero_or_more(|g| {
-                g.node(Kind::NodeBinaryExpr, |g| {
-                    g.choices(vec![
-                        Box::new(|g| { g.call("op_amp_amp"); }),
-                        Box::new(|g| { g.call("and_kw"); }),
-                    ]);
-                    g.call("expr_instanceof");
-                });
-            });
-        });
-    });
+    left_assoc_level_with_wrapper(
+        g,
+        "expr_and",
+        "expr_instanceof",
+        &["op_amp_amp", "and_kw"],
+    );
 }
 
-/// Or: `expr_and` ( ( || | or ) `expr_and` )*
+/// Or: expr_and ( || | or expr_and )* (sipha precedence + wrapper).
 pub fn add_expr_or(g: &mut sipha::builder::GrammarBuilder) {
-    g.parser_rule("expr_or", |g: &mut sipha::builder::GrammarBuilder| {
-        g.node(Kind::NodeBinaryLevel, |g| {
-            g.call("expr_and");
-            g.zero_or_more(|g| {
-                g.node(Kind::NodeBinaryExpr, |g| {
-                    g.choices(vec![
-                        Box::new(|g| { g.call("op_pipe_pipe"); }),
-                        Box::new(|g| { g.call("or_kw"); }),
-                    ]);
-                    g.call("expr_and");
-                });
-            });
-        });
-    });
+    left_assoc_level_with_wrapper(g, "expr_or", "expr_and", &["op_pipe_pipe", "or_kw"]);
 }
 
-/// Xor: `expr_or` ( xor `expr_xor` )*
+/// Xor: expr_or ( xor expr_or )* (sipha precedence + wrapper).
 pub fn add_expr_xor(g: &mut sipha::builder::GrammarBuilder) {
-    g.parser_rule("expr_xor", |g: &mut sipha::builder::GrammarBuilder| {
-        g.node(Kind::NodeBinaryLevel, |g| {
-            g.call("expr_or");
-            g.zero_or_more(|g| {
-                g.node(Kind::NodeBinaryExpr, |g| {
-                    g.call("xor_kw");
-                    g.call("expr_xor");
-                });
-            });
-        });
-    });
+    left_assoc_level_with_wrapper(g, "expr_xor", "expr_or", &["xor_kw"]);
 }
 
 /// Ternary: `expr_xor` ? expr : `expr_ternary` | `expr_xor`
