@@ -57,16 +57,33 @@ fn node_id(node: &SyntaxNode) -> (usize, u32) {
     )
 }
 
+/// Elements to show for a node (filtered by show_trivia), with `is_last` for tree connectors.
+fn visible_elements(
+    node: &SyntaxNode,
+    options: &TreeDisplayOptions,
+) -> Vec<(SyntaxElement, bool)> {
+    let elements: Vec<SyntaxElement> = node.children().collect();
+    let visible: Vec<_> = elements
+        .into_iter()
+        .filter(|e| {
+            !matches!(e, SyntaxElement::Token(t) if t.is_trivia() && !options.show_trivia)
+        })
+        .collect();
+    let n = visible.len();
+    visible
+        .into_iter()
+        .enumerate()
+        .map(|(i, e)| (e, i == n.saturating_sub(1)))
+        .collect()
+}
+
 /// Format a syntax tree starting at `root` as a multi-line string.
 ///
-/// If `root` is a synthetic root (single wrapper node), it is unwrapped so the
-/// first child is used as the displayed root. Detects cycles and prints `[cycle]`
-/// to avoid infinite recursion.
+/// Detects cycles and prints `[cycle]` to avoid infinite recursion.
 pub fn format_syntax_tree(root: &SyntaxNode, options: &TreeDisplayOptions) -> String {
-    let root = unwrap_synthetic_root(root);
     let mut out = String::new();
     let mut visited = HashSet::new();
-    format_node(root, options, "", true, &mut out, &mut visited);
+    format_node(root.clone(), options, "", true, &mut out, &mut visited);
     out
 }
 
@@ -75,11 +92,21 @@ pub fn print_syntax_tree(root: &SyntaxNode, options: &TreeDisplayOptions) {
     println!("{}", format_syntax_tree(root, options));
 }
 
-fn unwrap_synthetic_root(root: &SyntaxNode) -> SyntaxNode {
-    if root.kind() == syntax::SYNTHETIC_ROOT {
-        root.child_nodes().next().unwrap_or_else(|| root.clone())
+fn format_node_header(
+    prefix: &str,
+    is_last: bool,
+    kind_str: &str,
+    out: &mut String,
+    cycle: bool,
+) {
+    let connector = if is_last { "└── " } else { "├── " };
+    out.push_str(prefix);
+    out.push_str(connector);
+    out.push_str(kind_str);
+    if cycle {
+        out.push_str(" [cycle]\n");
     } else {
-        root.clone()
+        out.push('\n');
     }
 }
 
@@ -92,22 +119,13 @@ fn format_node(
     visited: &mut HashSet<(usize, u32)>,
 ) {
     let id = node_id(&node);
+    let kind_str = syntax::kind_name(node.kind());
     if !visited.insert(id) {
-        let kind_str = syntax::kind_name(node.kind());
-        let connector = if is_last { "└── " } else { "├── " };
-        out.push_str(prefix);
-        out.push_str(connector);
-        out.push_str(kind_str);
-        out.push_str(" [cycle]\n");
+        format_node_header(prefix, is_last, kind_str, out, true);
         return;
     }
 
-    let kind_str = syntax::kind_name(node.kind());
-    let connector = if is_last { "└── " } else { "├── " };
-    out.push_str(prefix);
-    out.push_str(connector);
-    out.push_str(kind_str);
-    out.push('\n');
+    format_node_header(prefix, is_last, kind_str, out, false);
 
     let new_prefix = if is_last {
         format!("{}    ", prefix)
@@ -115,37 +133,31 @@ fn format_node(
         format!("{}│   ", prefix)
     };
 
+    format_node_children(node, options, &new_prefix, out, visited);
+    visited.remove(&id);
+}
+
+fn format_node_children(
+    node: SyntaxNode,
+    options: &TreeDisplayOptions,
+    new_prefix: &str,
+    out: &mut String,
+    visited: &mut HashSet<(usize, u32)>,
+) {
     if options.show_tokens {
-        let elements: Vec<SyntaxElement> = node.children().collect();
-        let visible: Vec<(SyntaxElement, bool)> = {
-            let visible: Vec<_> = elements
-                .into_iter()
-                .filter(|e| {
-                    !matches!(e, SyntaxElement::Token(t) if t.is_trivia() && !options.show_trivia)
-                })
-                .collect();
-            let n = visible.len();
-            visible
-                .into_iter()
-                .enumerate()
-                .map(|(i, e)| (e, i == n.saturating_sub(1)))
-                .collect()
-        };
-        for (elem, is_last) in visible {
+        for (elem, is_last) in visible_elements(&node, options) {
             match elem {
-                SyntaxElement::Node(n) => format_node(n, options, &new_prefix, is_last, out, visited),
-                SyntaxElement::Token(t) => format_token(&t, options, &new_prefix, is_last, out),
+                SyntaxElement::Node(n) => format_node(n, options, new_prefix, is_last, out, visited),
+                SyntaxElement::Token(t) => format_token(&t, options, new_prefix, is_last, out),
             }
         }
     } else {
         let child_nodes: Vec<SyntaxNode> = node.child_nodes().collect();
         let last_idx = child_nodes.len().saturating_sub(1);
         for (i, child) in child_nodes.into_iter().enumerate() {
-            format_node(child, options, &new_prefix, i == last_idx, out, visited);
+            format_node(child, options, new_prefix, i == last_idx, out, visited);
         }
     }
-
-    visited.remove(&id);
 }
 
 fn format_token(

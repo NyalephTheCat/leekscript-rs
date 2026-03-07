@@ -4,9 +4,12 @@ use std::sync::OnceLock;
 
 use sipha::engine::{Engine, ParseError, ParseOutput};
 use sipha::insn::ParseGraph;
+use sipha::parsed_doc::ParsedDoc;
 use sipha::red::SyntaxNode;
 
-use crate::grammar::{build_expression_grammar, build_grammar, build_program_grammar};
+use crate::grammar::{
+    build_expression_grammar, build_grammar, build_program_grammar, build_signature_grammar,
+};
 
 type BuiltAndGraph = (sipha::builder::BuiltGraph, ParseGraph);
 
@@ -21,32 +24,43 @@ where
     })
 }
 
-/// Cached (BuiltGraph, ParseGraph) for token stream parsing (Phase 1).
-fn token_stream_built_and_graph() -> &'static BuiltAndGraph {
-    static STORAGE: OnceLock<BuiltAndGraph> = OnceLock::new();
-    cache_grammar(&STORAGE, build_grammar)
+macro_rules! cached_grammar_fn {
+    ($name:ident, $build:ident) => {
+        fn $name() -> &'static BuiltAndGraph {
+            static STORAGE: OnceLock<BuiltAndGraph> = OnceLock::new();
+            cache_grammar(&STORAGE, $build)
+        }
+    };
 }
 
-/// Cached (BuiltGraph, ParseGraph) for expression-only parsing (Phase 2).
-fn expression_built_and_graph() -> &'static BuiltAndGraph {
-    static STORAGE: OnceLock<BuiltAndGraph> = OnceLock::new();
-    cache_grammar(&STORAGE, build_expression_grammar)
-}
+cached_grammar_fn!(token_stream_built_and_graph, build_grammar);
+cached_grammar_fn!(expression_built_and_graph, build_expression_grammar);
+cached_grammar_fn!(program_built_and_graph, build_program_grammar);
+cached_grammar_fn!(signature_built_and_graph, build_signature_grammar);
 
-/// Cached (BuiltGraph, ParseGraph) for program parsing (Phase 3/4).
-fn program_built_and_graph() -> &'static BuiltAndGraph {
-    static STORAGE: OnceLock<BuiltAndGraph> = OnceLock::new();
-    cache_grammar(&STORAGE, build_program_grammar)
+/// Single place for engine creation and parse; returns raw ParseOutput.
+fn run_parse(
+    source: &str,
+    get_graph: fn() -> &'static BuiltAndGraph,
+) -> Result<ParseOutput, ParseError> {
+    let (_, graph) = get_graph();
+    let mut engine = Engine::new().with_memo();
+    engine.parse(graph, source.as_bytes())
 }
 
 fn parse_to_syntax_root(
     source: &str,
     get_graph: fn() -> &'static BuiltAndGraph,
 ) -> Result<Option<SyntaxNode>, ParseError> {
-    let (_, graph) = get_graph();
-    let mut engine = Engine::new();
-    let out = engine.parse(graph, source.as_bytes())?;
+    let out = run_parse(source, get_graph)?;
     Ok(out.syntax_root(source.as_bytes()))
+}
+
+fn parse_to_output(
+    source: &str,
+    get_graph: fn() -> &'static BuiltAndGraph,
+) -> Result<ParseOutput, ParseError> {
+    run_parse(source, get_graph)
 }
 
 /// Parse source as a token stream (Phase 1 lexer).
@@ -54,9 +68,7 @@ fn parse_to_syntax_root(
 /// Returns the sipha parse output; use `.syntax_root(source.as_bytes())` to get
 /// the root syntax node, or `.tree_events` for the raw event list.
 pub fn parse_tokens(source: &str) -> Result<ParseOutput, ParseError> {
-    let (_, graph) = token_stream_built_and_graph();
-    let mut engine = Engine::new();
-    engine.parse(graph, source.as_bytes())
+    run_parse(source, token_stream_built_and_graph)
 }
 
 /// Parse source as a program (Phase 3/4: list of statements).
@@ -72,4 +84,137 @@ pub fn parse(source: &str) -> Result<Option<SyntaxNode>, ParseError> {
 /// Uses a dedicated expression grammar (primary: number, string, identifier, parenthesized expr).
 pub fn parse_expression(source: &str) -> Result<Option<SyntaxNode>, ParseError> {
     parse_to_syntax_root(source, expression_built_and_graph)
+}
+
+/// Parse source as a signature file (function/class/global declarations only).
+///
+/// Returns the root node (NodeSigFile) whose children are sig items.
+/// Use for loading stdlib or other API signature definitions.
+pub fn parse_signatures(source: &str) -> Result<Option<SyntaxNode>, ParseError> {
+    parse_to_syntax_root(source, signature_built_and_graph)
+}
+
+/// Parse source and return a [`ParsedDoc`]: source bytes, line index, and syntax root.
+///
+/// Use this when you need offset-to-line/column, [`ParsedDoc::node_at_offset`],
+/// [`ParsedDoc::token_at_offset`], or formatted diagnostics. Returns `None` if
+/// the parse produced no or invalid tree events.
+pub fn parse_to_doc(source: &str) -> Result<Option<ParsedDoc>, ParseError> {
+    let out = parse_to_output(source, program_built_and_graph)?;
+    Ok(ParsedDoc::new(source.as_bytes().to_vec(), out))
+}
+
+/// Parse in recovering mode: on failure, returns the partial output and the error.
+///
+/// Returns `Ok(out)` on full success; `Err((partial, e))` on failure, with
+/// `partial` containing tree events and `consumed` up to the error position.
+/// Use `partial.syntax_root(source.as_bytes())` to try to build a partial tree
+/// (may be `None` if events are not well-nested). Use for IDE or multi-error reporting.
+pub fn parse_recovering(source: &str) -> Result<ParseOutput, (ParseOutput, ParseError)> {
+    let (_, graph) = program_built_and_graph();
+    let mut engine = Engine::new().with_memo();
+    engine.parse_recovering(graph, source.as_bytes())
+}
+
+/// Literal table for the program grammar (used for parsing full programs).
+///
+/// Use with [`parse_error_to_miette`] so that "expected literal#n" in diagnostics
+/// is resolved to the actual token text (e.g. `"var"`, `"function"`).
+pub fn program_literals() -> &'static sipha::insn::LiteralTable {
+    &program_built_and_graph().1.literals
+}
+
+/// Rule names for the program grammar (used for diagnostics).
+///
+/// Use with [`parse_error_to_miette`] so that "expected rule#n" shows as the rule name.
+pub fn program_rule_names() -> &'static [&'static str] {
+    program_built_and_graph().1.rule_names
+}
+
+/// Expected labels for the program grammar (used for diagnostics).
+pub fn program_expected_labels() -> &'static [&'static str] {
+    program_built_and_graph().1.expected_labels
+}
+
+/// Convert a parse error into a [`miette::Report`] with source snippet and resolved literals.
+///
+/// Uses the **program** grammar's literal and rule-name tables so that expected
+/// tokens and rules show as readable text (e.g. `"var"`, `statement`). Returns
+/// `None` for [`ParseError::BadGraph`](sipha::engine::ParseError::BadGraph).
+///
+/// Use when the error came from [`parse`]. For [`parse_expression`] or
+/// [`parse_tokens`], use the corresponding graph literals via sipha directly
+/// if you need miette reports.
+pub fn parse_error_to_miette(
+    e: &ParseError,
+    source: &str,
+    filename: &str,
+) -> Option<miette::Report> {
+    e.to_miette_report(
+        source,
+        filename,
+        Some(program_literals()),
+        Some(program_rule_names()),
+        Some(program_expected_labels()),
+    )
+}
+
+#[cfg(test)]
+mod tests {
+    use sipha::red::SyntaxElement;
+
+    use crate::syntax::Kind;
+
+    use super::{parse, parse_expression, parse_tokens};
+
+    #[test]
+    fn parse_tokens_valid() {
+        let out = parse_tokens("var x = 42").unwrap();
+        let root = out.syntax_root("var x = 42".as_bytes());
+        assert!(root.is_some(), "token stream should produce a root");
+    }
+
+    #[test]
+    fn parse_tokens_invalid() {
+        let result = parse_tokens("'unterminated string");
+        assert!(result.is_err(), "unterminated string should fail");
+    }
+
+    #[test]
+    fn parse_expression_valid() {
+        let root = parse_expression("1").unwrap();
+        assert!(root.is_some(), "simple expression should parse");
+    }
+
+    #[test]
+    fn parse_expression_invalid() {
+        let result = parse_expression("1 + ");
+        assert!(result.is_err() || result.as_ref().ok().and_then(|r| r.as_ref()).is_none());
+    }
+
+    #[test]
+    fn parse_valid_program() {
+        let root = parse("return 1 + 2").unwrap().expect("root");
+        assert_eq!(root.kind_as::<Kind>(), Some(Kind::NodeRoot));
+        let node_children: Vec<_> = root
+            .children()
+            .filter_map(|c| match c {
+                SyntaxElement::Node(n) => Some(n),
+                _ => None,
+            })
+            .collect();
+        assert!(!node_children.is_empty(), "root should have statement children");
+        assert_eq!(
+            node_children[0].kind_as::<Kind>(),
+            Some(Kind::NodeReturnStmt),
+            "first statement should be return"
+        );
+    }
+
+    #[test]
+    fn parse_invalid_program() {
+        // Unclosed brace or invalid token sequence should fail.
+        let result = parse("return (");
+        assert!(result.is_err(), "invalid program should return parse error");
+    }
 }

@@ -1,0 +1,1 @@
+var s = "hi"; var t = true; var nil = null;

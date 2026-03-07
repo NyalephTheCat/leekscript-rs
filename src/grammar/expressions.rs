@@ -27,7 +27,7 @@ pub fn add_expr_minimal(g: &mut sipha::builder::GrammarBuilder) {
 
 // ─── Program grammar: full expression precedence ───────────────────────────────
 
-/// Primary: literals, ident, new, (expr), [array], {object}.
+/// Primary: literals, ident (and contextual keywords this/class via keyword_or_ident), new, (expr), [array], {object}.
 pub fn add_primary(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("primary", |g: &mut sipha::builder::GrammarBuilder| {
         g.node(Kind::NodePrimaryExpr, |g| {
@@ -53,15 +53,15 @@ pub fn add_primary(g: &mut sipha::builder::GrammarBuilder) {
                         g.call("rparen");
                     });
                 }),
-                Box::new(|g| { g.call("ident"); }),
+                Box::new(|g| { g.call("keyword_or_ident"); }),
                 Box::new(|g| {
                     g.node(Kind::NodeAnonFn, |g| {
                         g.call("lparen");
                         g.optional(|g| {
-                            g.call("keyword_or_ident");
+                            g.call("param");
                             g.zero_or_more(|g| {
                                 g.call("comma");
-                                g.call("keyword_or_ident");
+                                g.call("param");
                             });
                         });
                         g.call("rparen");
@@ -110,11 +110,64 @@ pub fn add_primary(g: &mut sipha::builder::GrammarBuilder) {
     });
 }
 
-/// Bracket literal: [ ] array, [ : ] empty map, [ k : v, ... ] map, [ e, ... ] array.
-/// Tries empty map first, then map with entries, then array.
+/// Interval literal: ] or [ on each side (closed/open). Four forms: ]a..b], ]a..b[, [a..b], [a..b[.
+pub fn add_interval_literal(g: &mut sipha::builder::GrammarBuilder) {
+    g.parser_rule("interval_literal", |g: &mut sipha::builder::GrammarBuilder| {
+        g.node(Kind::NodeInterval, |g| {
+            g.choices(vec![
+                Box::new(|g| {
+                    g.call("rbracket");
+                    g.call("expr");
+                    g.call("dot_dot");
+                    g.call("expr");
+                    g.call("rbracket");
+                }),
+                Box::new(|g| {
+                    g.call("rbracket");
+                    g.call("expr");
+                    g.call("dot_dot");
+                    g.call("expr");
+                    g.call("lbracket");
+                }),
+                Box::new(|g| {
+                    g.call("lbracket");
+                    g.call("expr");
+                    g.call("dot_dot");
+                    g.call("expr");
+                    g.call("rbracket");
+                }),
+                Box::new(|g| {
+                    g.call("lbracket");
+                    g.call("expr");
+                    g.call("dot_dot");
+                    g.call("expr");
+                    g.call("lbracket");
+                }),
+            ]);
+        });
+    });
+}
+
+/// Bracket literal: [ e, ... ] array, interval, [ : ] empty map, [ k : v, ... ] map.
+/// Tries array first so "[ [0,-1], ... ]" parses; then interval for [a..b] etc.
 pub fn add_bracket_literal(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("bracket_literal", |g: &mut sipha::builder::GrammarBuilder| {
         g.choices(vec![
+            Box::new(|g| {
+                g.node(Kind::NodeArray, |g| {
+                    g.call("lbracket");
+                    g.optional(|g| {
+                        g.call("expr_as");
+                        g.zero_or_more(|g| {
+                            g.call("comma");
+                            g.call("expr_as");
+                        });
+                        g.optional(|g| { g.call("comma"); });
+                    });
+                    g.call("rbracket");
+                });
+            }),
+            Box::new(|g| { g.call("interval_literal"); }),
             Box::new(|g| {
                 g.node(Kind::NodeMap, |g| {
                     g.call("lbracket");
@@ -129,19 +182,6 @@ pub fn add_bracket_literal(g: &mut sipha::builder::GrammarBuilder) {
                     g.zero_or_more(|g| {
                         g.call("comma");
                         g.call("map_pair");
-                    });
-                    g.call("rbracket");
-                });
-            }),
-            Box::new(|g| {
-                g.node(Kind::NodeArray, |g| {
-                    g.call("lbracket");
-                    g.optional(|g| {
-                        g.call("expr");
-                        g.zero_or_more(|g| {
-                            g.call("comma");
-                            g.call("expr");
-                        });
                     });
                     g.call("rbracket");
                 });
@@ -222,6 +262,7 @@ pub fn add_postfix(g: &mut sipha::builder::GrammarBuilder) {
                 }),
                 Box::new(|g| { g.call("op_plus_plus"); }),
                 Box::new(|g| { g.call("op_minus_minus"); }),
+                Box::new(|g| { g.call("op_bang_postfix"); }),
             ]);
         });
     });
@@ -330,10 +371,10 @@ pub fn add_expr_compare(g: &mut sipha::builder::GrammarBuilder) {
         g.zero_or_more(|g| {
             g.node(Kind::NodeBinaryExpr, |g| {
                 g.choices(vec![
-                    Box::new(|g| { g.call("op_lt"); }),
                     Box::new(|g| { g.call("op_le"); }),
-                    Box::new(|g| { g.call("op_gt"); }),
                     Box::new(|g| { g.call("op_ge"); }),
+                    Box::new(|g| { g.call("op_lt"); }),
+                    Box::new(|g| { g.call("op_gt"); }),
                 ]);
                 g.call("expr_interval");
             });
@@ -341,15 +382,16 @@ pub fn add_expr_compare(g: &mut sipha::builder::GrammarBuilder) {
     });
 }
 
-/// Equality: expr_compare ( == != expr_compare )*
+/// Equality: expr_compare ( === !== == != expr_compare )*
 pub fn add_expr_equality(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("expr_equality", |g: &mut sipha::builder::GrammarBuilder| {
         g.call("expr_compare");
         g.zero_or_more(|g| {
             g.node(Kind::NodeBinaryExpr, |g| {
                 g.choices(vec![
+                    Box::new(|g| { g.call("op_strict_eq"); }),
+                    Box::new(|g| { g.call("op_neq_or_strict"); }),
                     Box::new(|g| { g.call("op_eq"); }),
-                    Box::new(|g| { g.call("op_neq"); }),
                 ]);
                 g.call("expr_compare");
             });
@@ -357,39 +399,58 @@ pub fn add_expr_equality(g: &mut sipha::builder::GrammarBuilder) {
     });
 }
 
-/// Instanceof: expr_equality ( instanceof keyword_or_ident )*
-pub fn add_expr_instanceof(g: &mut sipha::builder::GrammarBuilder) {
-    g.parser_rule("expr_instanceof", |g: &mut sipha::builder::GrammarBuilder| {
+/// In (membership): expr_equality ( in expr_equality )*
+pub fn add_expr_in(g: &mut sipha::builder::GrammarBuilder) {
+    g.parser_rule("expr_in", |g: &mut sipha::builder::GrammarBuilder| {
         g.call("expr_equality");
         g.zero_or_more(|g| {
             g.node(Kind::NodeBinaryExpr, |g| {
-                g.call("instanceof_kw");
-                g.call("keyword_or_ident");
+                g.call("in_kw");
+                g.call("expr_equality");
             });
         });
     });
 }
 
-/// And: expr_instanceof ( && expr_instanceof )*
+/// Instanceof: expr_in ( instanceof expr_equality )*
+pub fn add_expr_instanceof(g: &mut sipha::builder::GrammarBuilder) {
+    g.parser_rule("expr_instanceof", |g: &mut sipha::builder::GrammarBuilder| {
+        g.call("expr_in");
+        g.zero_or_more(|g| {
+            g.node(Kind::NodeBinaryExpr, |g| {
+                g.call("instanceof_kw");
+                g.call("expr_equality");
+            });
+        });
+    });
+}
+
+/// And: expr_instanceof ( ( && | and ) expr_instanceof )*
 pub fn add_expr_and(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("expr_and", |g: &mut sipha::builder::GrammarBuilder| {
         g.call("expr_instanceof");
         g.zero_or_more(|g| {
             g.node(Kind::NodeBinaryExpr, |g| {
-                g.call("op_amp_amp");
+                g.choices(vec![
+                    Box::new(|g| { g.call("op_amp_amp"); }),
+                    Box::new(|g| { g.call("and_kw"); }),
+                ]);
                 g.call("expr_instanceof");
             });
         });
     });
 }
 
-/// Or: expr_and ( || expr_and )*
+/// Or: expr_and ( ( || | or ) expr_and )*
 pub fn add_expr_or(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("expr_or", |g: &mut sipha::builder::GrammarBuilder| {
         g.call("expr_and");
         g.zero_or_more(|g| {
             g.node(Kind::NodeBinaryExpr, |g| {
-                g.call("op_pipe_pipe");
+                g.choices(vec![
+                    Box::new(|g| { g.call("op_pipe_pipe"); }),
+                    Box::new(|g| { g.call("or_kw"); }),
+                ]);
                 g.call("expr_and");
             });
         });
@@ -429,48 +490,60 @@ pub fn add_expr_ternary(g: &mut sipha::builder::GrammarBuilder) {
 
 // ─── Type expression (for annotations and casts) ─────────────────────────────
 
-/// Type params: `< T >` | `< K , V >` | `< T => R >` | `< ( T , ... ) => R >`
-/// Matches LeekScript Java: Array/Set single param, Map two params, Function one-or-more params and return.
+/// Type params: `< => R >` | `< T >` | `< K , V >` | `< T => R >` | `< T , V , ... => R >`
+/// Shorthand: bare Array, Map, Set, Interval (no `<...>`) = Array<any>, Map<any, any>, etc.
+/// Function: Function< => ret> (0 params) or Function<a, b => ret>.
 pub fn add_type_params(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("type_params", |g: &mut sipha::builder::GrammarBuilder| {
         g.node(Kind::NodeTypeParams, |g| {
-            g.call("type_expr");
             g.choices(vec![
-                Box::new(|g| { g.call("op_gt"); }),
-                Box::new(|g| {
-                    g.call("comma");
-                    g.call("type_expr");
-                    g.call("op_gt");
-                }),
+                // Zero params: => ret>
                 Box::new(|g| {
                     g.call("arrow");
                     g.call("type_expr");
-                    g.call("op_gt");
+                    g.no_skip(|g| { g.call("op_gt"); });
                 }),
+                // One or more params (then optional => return)
                 Box::new(|g| {
-                    g.call("comma");
                     g.call("type_expr");
-                    g.zero_or_more(|g| {
-                        g.call("comma");
-                        g.call("type_expr");
-                    });
-                    g.call("arrow");
-                    g.call("type_expr");
-                    g.call("op_gt");
+                    g.choices(vec![
+                        Box::new(|g| { g.no_skip(|g| { g.call("op_gt"); }); }),
+                        Box::new(|g| {
+                            g.call("comma");
+                            g.call("type_expr");
+                            g.no_skip(|g| { g.call("op_gt"); });
+                        }),
+                        Box::new(|g| {
+                            g.call("arrow");
+                            g.call("type_expr");
+                            g.no_skip(|g| { g.call("op_gt"); });
+                        }),
+                        Box::new(|g| {
+                            g.call("comma");
+                            g.call("type_expr");
+                            g.zero_or_more(|g| {
+                                g.call("comma");
+                                g.call("type_expr");
+                            });
+                            g.call("arrow");
+                            g.call("type_expr");
+                            g.no_skip(|g| { g.call("op_gt"); });
+                        }),
+                    ]);
                 }),
             ]);
         });
     });
 }
 
-/// Type primary: ident or ident `<` type_params `>`
+/// Type primary: ident or ident `<` type_params (type_params already ends with `>`).
+/// Bare Array, Map, Set, Interval (no `<...>`) are valid shorthands for Array<any>, Map<any, any>, etc.
 pub fn add_type_primary(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("type_primary", |g: &mut sipha::builder::GrammarBuilder| {
         g.call("keyword_or_ident");
         g.optional(|g| {
             g.call("op_lt");
             g.call("type_params");
-            g.call("op_gt");
         });
     });
 }

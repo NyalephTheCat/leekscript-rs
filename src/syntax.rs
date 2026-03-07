@@ -118,6 +118,15 @@ pub enum Kind {
     NodeParam,
     NodeTypeExpr,
     NodeTypeParams,
+    // Signature file nodes (for stdlib / API signature files, not LeekScript source)
+    NodeSigFile,
+    NodeSigFunction,
+    NodeSigClass,
+    NodeSigMethod,
+    NodeSigConstructor,
+    NodeSigField,
+    NodeSigGlobal,
+    NodeSigParam,
 }
 
 /// sipha uses this kind for a wrapper root when the grammar produces a single root node.
@@ -167,6 +176,14 @@ fn kind_name_enum(k: Kind) -> &'static str {
         Kind::NodeTypeExpr => "TYPE_EXPR",
         Kind::NodeTypeParams => "TYPE_PARAMS",
         Kind::NodeAsCast => "AS_CAST",
+        Kind::NodeSigFile => "SIG_FILE",
+        Kind::NodeSigFunction => "SIG_FUNCTION",
+        Kind::NodeSigClass => "SIG_CLASS",
+        Kind::NodeSigMethod => "SIG_METHOD",
+        Kind::NodeSigConstructor => "SIG_CONSTRUCTOR",
+        Kind::NodeSigField => "SIG_FIELD",
+        Kind::NodeSigGlobal => "SIG_GLOBAL",
+        Kind::NodeSigParam => "SIG_PARAM",
         _ => "?",
     }
 }

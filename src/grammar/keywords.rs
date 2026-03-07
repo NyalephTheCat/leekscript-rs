@@ -15,6 +15,20 @@ fn kw(g: &mut sipha::builder::GrammarBuilder, kind: Kind, lit: &[u8]) {
     });
 }
 
+/// Lexer rule that matches only "and" (for expression grammar; same as &&).
+pub fn add_and_kw(g: &mut sipha::builder::GrammarBuilder) {
+    g.lexer_rule("and_kw", |g| {
+        kw(g, Kind::KwAnd, b"and");
+    });
+}
+
+/// Lexer rule that matches only "or" (for expression grammar; same as ||).
+pub fn add_or_kw(g: &mut sipha::builder::GrammarBuilder) {
+    g.lexer_rule("or_kw", |g| {
+        kw(g, Kind::KwOr, b"or");
+    });
+}
+
 /// Lexer rule that matches only "xor" (for expression grammar).
 pub fn add_xor_kw(g: &mut sipha::builder::GrammarBuilder) {
     g.lexer_rule("xor_kw", |g| {
@@ -92,6 +106,13 @@ pub fn add_as_kw(g: &mut sipha::builder::GrammarBuilder) {
     });
 }
 
+/// Lexer rule that matches only "in" (binary operator; word boundary so "instanceof" is not split).
+pub fn add_in_kw(g: &mut sipha::builder::GrammarBuilder) {
+    g.lexer_rule("in_kw", |g| {
+        kw(g, Kind::KwIn, b"in");
+    });
+}
+
 /// Lexer rule that matches only "instanceof" (binary operator).
 pub fn add_instanceof_kw(g: &mut sipha::builder::GrammarBuilder) {
     g.lexer_rule("instanceof_kw", |g| {
@@ -119,6 +140,9 @@ const TOKEN_KEYWORDS: &[(Kind, &[u8])] = &[
     (Kind::KwConst, b"const"),
     (Kind::KwInclude, b"include"),
     (Kind::KwIn, b"in"),
+    (Kind::KwInstanceof, b"instanceof"),
+    (Kind::KwAs, b"as"),
+    (Kind::KwNot, b"not"),
     (Kind::KwBreak, b"break"),
     (Kind::KwContinue, b"continue"),
     (Kind::KwDo, b"do"),

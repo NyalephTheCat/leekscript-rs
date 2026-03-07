@@ -69,7 +69,14 @@ pub fn add_number_lit(g: &mut sipha::builder::GrammarBuilder) {
             );
             g.optional(|g| {
                 g.byte(b'.');
-                g.one_or_more(|g| { g.class(classes::DIGIT); });
+                g.choices(vec![
+                    Box::new(|g| { g.one_or_more(|g| { g.class(classes::DIGIT); }); }),
+                    // Trailing "." (e.g. "1.") but not when followed by "." (so "1..10" parses as 1 .. 10)
+                    Box::new(|g| {
+                        g.neg_lookahead(|g| { g.class(classes::DIGIT); });
+                        g.neg_lookahead(|g| { g.byte(b'.'); });
+                    }),
+                ]);
             });
         });
     });
@@ -89,7 +96,14 @@ pub fn add_number_lit_full(g: &mut sipha::builder::GrammarBuilder) {
             );
             g.optional(|g| {
                 g.byte(b'.');
-                g.one_or_more(|g| { g.class(classes::DIGIT); });
+                g.choices(vec![
+                    Box::new(|g| { g.one_or_more(|g| { g.class(classes::DIGIT); }); }),
+                    // Trailing "." but not when followed by "." (so "1..10" parses as range)
+                    Box::new(|g| {
+                        g.neg_lookahead(|g| { g.class(classes::DIGIT); });
+                        g.neg_lookahead(|g| { g.byte(b'.'); });
+                    }),
+                ]);
             });
             g.optional(|g| {
                 g.choice(|g| { g.byte(b'e'); }, |g| { g.byte(b'E'); });

@@ -34,23 +34,26 @@ pub fn add_var_decl(g: &mut sipha::builder::GrammarBuilder) {
                     });
                 }),
             ]);
-            g.call("semicolon");
+            g.optional(|g| { g.call("semicolon"); });
         });
     });
 }
 
-/// Global decl: `global integer x = 10` — global keyword, optional type, then name.
+/// Global decl: `global integer x = 10` or `global integer x` — try with initializer first, then one optional semicolon.
 pub fn add_global_decl(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("global_decl", |g: &mut sipha::builder::GrammarBuilder| {
         g.node(Kind::NodeVarDecl, |g| {
             g.token(Kind::KwGlobal, |g| { g.literal(b"global"); });
             g.optional(|g| { g.call("type_expr"); });
             g.call("keyword_or_ident");
-            g.optional(|g| {
-                g.call("op_assign");
-                g.call("expr");
-            });
-            g.call("semicolon");
+            g.choices(vec![
+                Box::new(|g| {
+                    g.call("op_assign");
+                    g.call("expr_as");
+                }),
+                Box::new(|_g| {}),
+            ]);
+            g.optional(|g| { g.call("semicolon"); });
         });
     });
 }
@@ -65,7 +68,7 @@ pub fn add_const_decl(g: &mut sipha::builder::GrammarBuilder) {
                 g.call("op_assign");
                 g.call("expr");
             });
-            g.call("semicolon");
+            g.optional(|g| { g.call("semicolon"); });
         });
     });
 }
@@ -80,7 +83,7 @@ pub fn add_let_decl(g: &mut sipha::builder::GrammarBuilder) {
                 g.call("op_assign");
                 g.call("expr");
             });
-            g.call("semicolon");
+            g.optional(|g| { g.call("semicolon"); });
         });
     });
 }
@@ -118,7 +121,7 @@ pub fn add_return_stmt(g: &mut sipha::builder::GrammarBuilder) {
         g.node(Kind::NodeReturnStmt, |g| {
             g.token(Kind::KwReturn, |g| { g.literal(b"return"); });
             g.optional(|g| { g.call("expr"); });
-            g.call("semicolon");
+            g.optional(|g| { g.call("semicolon"); });
         });
     });
 }
@@ -127,7 +130,7 @@ pub fn add_break_stmt(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("break_stmt", |g: &mut sipha::builder::GrammarBuilder| {
         g.node(Kind::NodeBreakStmt, |g| {
             g.token(Kind::KwBreak, |g| { g.literal(b"break"); });
-            g.call("semicolon");
+            g.optional(|g| { g.call("semicolon"); });
         });
     });
 }
@@ -136,7 +139,7 @@ pub fn add_continue_stmt(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("continue_stmt", |g: &mut sipha::builder::GrammarBuilder| {
         g.node(Kind::NodeContinueStmt, |g| {
             g.token(Kind::KwContinue, |g| { g.literal(b"continue"); });
-            g.call("semicolon");
+            g.optional(|g| { g.call("semicolon"); });
         });
     });
 }
@@ -145,7 +148,7 @@ pub fn add_expr_stmt(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("expr_stmt", |g: &mut sipha::builder::GrammarBuilder| {
         g.node(Kind::NodeExprStmt, |g| {
             g.call("expr");
-            g.call("semicolon");
+            g.optional(|g| { g.call("semicolon"); });
         });
     });
 }
@@ -157,7 +160,7 @@ pub fn add_include_stmt(g: &mut sipha::builder::GrammarBuilder) {
             g.call("lparen");
             g.call("string_lit");
             g.call("rparen");
-            g.call("semicolon");
+            g.optional(|g| { g.call("semicolon"); });
         });
     });
 }
@@ -262,7 +265,7 @@ pub fn add_class_field(g: &mut sipha::builder::GrammarBuilder) {
                 g.call("op_assign");
                 g.call("expr");
             });
-            g.call("semicolon");
+            g.optional(|g| { g.call("semicolon"); });
         });
     });
 }
@@ -339,9 +342,9 @@ pub fn add_for_stmt(g: &mut sipha::builder::GrammarBuilder) {
             g.token(Kind::KwFor, |g| { g.literal(b"for"); });
             g.call("lparen");
             g.optional(|g| { g.call("for_init"); });
-            g.call("semicolon");
+            g.optional(|g| { g.call("semicolon"); });
             g.optional(|g| { g.call("expr"); });
-            g.call("semicolon");
+            g.optional(|g| { g.call("semicolon"); });
             g.optional(|g| { g.call("expr"); });
             g.call("rparen");
             g.call("statement");
@@ -349,13 +352,14 @@ pub fn add_for_stmt(g: &mut sipha::builder::GrammarBuilder) {
     });
 }
 
-/// For-in: for ( [var] key [ : [type_expr] [var] valueVar ] in expr ) statement.
-/// Matches LeekScript Java: key, optional : then optional type, optional "var", then value name.
+/// For-in: for ( [type_expr] [var] key [ : [type_expr] [var] valueVar ] in expr ) statement.
+/// Matches LeekScript Java: optional type then key, or key : optional type then value name.
 pub fn add_for_in_stmt(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("for_in_stmt", |g: &mut sipha::builder::GrammarBuilder| {
         g.node(Kind::NodeForInStmt, |g| {
             g.token(Kind::KwFor, |g| { g.literal(b"for"); });
             g.call("lparen");
+            g.optional(|g| { g.call("type_expr"); });
             g.optional(|g| { g.token(Kind::KwVar, |g| { g.literal(b"var"); }); });
             g.call("keyword_or_ident"); // key
             g.optional(|g| {
@@ -381,7 +385,7 @@ pub fn add_do_while_stmt(g: &mut sipha::builder::GrammarBuilder) {
             g.call("lparen");
             g.call("expr");
             g.call("rparen");
-            g.call("semicolon");
+            g.optional(|g| { g.call("semicolon"); });
         });
     });
 }
@@ -389,6 +393,9 @@ pub fn add_do_while_stmt(g: &mut sipha::builder::GrammarBuilder) {
 pub fn add_statement(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("statement", |g: &mut sipha::builder::GrammarBuilder| {
         g.choices(vec![
+            Box::new(|g| { g.call("return_stmt"); }),
+            Box::new(|g| { g.call("break_stmt"); }),
+            Box::new(|g| { g.call("continue_stmt"); }),
             Box::new(|g| { g.call("include_stmt"); }),
             Box::new(|g| { g.call("function_decl"); }),
             Box::new(|g| { g.call("class_decl"); }),
@@ -396,15 +403,12 @@ pub fn add_statement(g: &mut sipha::builder::GrammarBuilder) {
             Box::new(|g| { g.call("for_stmt"); }),
             Box::new(|g| { g.call("do_while_stmt"); }),
             Box::new(|g| { g.call("block"); }),
-            Box::new(|g| { g.call("var_decl"); }),
             Box::new(|g| { g.call("global_decl"); }),
             Box::new(|g| { g.call("const_decl"); }),
             Box::new(|g| { g.call("let_decl"); }),
+            Box::new(|g| { g.call("var_decl"); }),
             Box::new(|g| { g.call("if_stmt"); }),
             Box::new(|g| { g.call("while_stmt"); }),
-            Box::new(|g| { g.call("return_stmt"); }),
-            Box::new(|g| { g.call("break_stmt"); }),
-            Box::new(|g| { g.call("continue_stmt"); }),
             Box::new(|g| { g.call("expr_stmt"); }),
         ]);
     });
@@ -412,10 +416,8 @@ pub fn add_statement(g: &mut sipha::builder::GrammarBuilder) {
 
 pub fn add_program(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("program", |g: &mut sipha::builder::GrammarBuilder| {
-        g.node(Kind::NodeRoot, |g| {
-            g.zero_or_more(|g| {
-                g.call("statement");
-            });
+        g.zero_or_more(|g| {
+            g.call("statement");
         });
     });
 }

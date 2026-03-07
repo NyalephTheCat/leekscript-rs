@@ -143,6 +143,15 @@ pub fn add_program_operators(g: &mut sipha::builder::GrammarBuilder) {
     g.lexer_rule("op_slash", |g| { g.token(Kind::TokOp, |g| { g.byte(b'/'); }); });
     g.lexer_rule("op_backslash", |g| { g.token(Kind::TokOp, |g| { g.byte(b'\\'); }); });
     g.lexer_rule("op_percent", |g| { g.token(Kind::TokOp, |g| { g.byte(b'%'); }); });
+    g.lexer_rule("op_strict_eq", |g| { g.token(Kind::TokOp, |g| { g.literal(b"==="); }); });
+    // Matches "!==" or "!=" (longer first via optional third '=') so PEG doesn't consume "!=" before trying "!==".
+    g.lexer_rule("op_neq_or_strict", |g| {
+        g.token(Kind::TokOp, |g| {
+            g.literal(b"!=");
+            g.optional(|g| { g.byte(b'='); });
+        });
+    });
+    g.lexer_rule("op_strict_neq", |g| { g.token(Kind::TokOp, |g| { g.literal(b"!=="); }); });
     g.lexer_rule("op_eq", |g| { g.token(Kind::TokOp, |g| { g.literal(b"=="); }); });
     g.lexer_rule("op_neq", |g| { g.token(Kind::TokOp, |g| { g.literal(b"!="); }); });
     g.lexer_rule("op_lt", |g| { g.token(Kind::TokOp, |g| { g.byte(b'<'); }); });
@@ -151,6 +160,13 @@ pub fn add_program_operators(g: &mut sipha::builder::GrammarBuilder) {
     g.lexer_rule("op_ge", |g| { g.token(Kind::TokOp, |g| { g.literal(b">="); }); });
     g.lexer_rule("op_question", |g| { g.token(Kind::TokOp, |g| { g.byte(b'?'); }); });
     g.lexer_rule("op_bang", |g| { g.token(Kind::TokOp, |g| { g.byte(b'!'); }); });
+    // Postfix "!" only when not part of "!=" or "!==" (so "!=" is parsed as binary op, not postfix "!" + "=").
+    g.lexer_rule("op_bang_postfix", |g| {
+        g.token(Kind::TokOp, |g| {
+            g.byte(b'!');
+            g.neg_lookahead(|g| { g.byte(b'='); });
+        });
+    });
     g.lexer_rule("op_at", |g| { g.token(Kind::TokOp, |g| { g.byte(b'@'); }); });
     g.lexer_rule("op_amp", |g| { g.token(Kind::TokOp, |g| { g.byte(b'&'); }); });
     g.lexer_rule("op_pipe", |g| { g.token(Kind::TokOp, |g| { g.byte(b'|'); }); });
