@@ -8,7 +8,7 @@ use clap::{Parser, Subcommand};
 use sipha::engine::ParseError;
 use sipha::red::SyntaxNode;
 
-use leekscript_rs::formatter::FormatterOptions;
+use leekscript_rs::formatter::{BraceStyle, FormatterOptions, IndentStyle, SemicolonStyle};
 use leekscript_rs::{
     analyze, analyze_with_signatures, expand_includes, format, parse, parse_error_to_miette,
     parse_signatures, IncludeError, LineIndex,
@@ -35,7 +35,7 @@ pub struct Cli {
 pub enum Commands {
     /// Format `LeekScript` source files or stdin.
     Format(FormatArgs),
-    /// Check syntax and optionally run analyses (stub).
+    /// Check syntax and run semantic analysis (scopes, types, deprecations).
     Validate(ValidateArgs),
 }
 
@@ -76,6 +76,22 @@ pub struct FormatArgs {
     /// When using --annotate-types: signature file(s) to load (function/global/class API). May be repeated.
     #[arg(long = "signatures", value_name = "FILE")]
     pub signature_files: Vec<std::path::PathBuf>,
+
+    /// Normalize layout: re-indent, apply brace/semicolon style. Ignores source whitespace and comments.
+    #[arg(long)]
+    pub canonical: bool,
+
+    /// Indent with "tabs" or "spaces" (default: 4). Used when --canonical.
+    #[arg(long, value_name = "tabs|spaces[N]", default_value = "tabs")]
+    pub indent: String,
+
+    /// Brace style: "same-line" or "next-line". Used when --canonical.
+    #[arg(long, value_name = "STYLE", default_value = "same-line")]
+    pub brace_style: String,
+
+    /// Semicolon style: "always" or "omit". Used when --canonical.
+    #[arg(long, value_name = "STYLE", default_value = "always")]
+    pub semicolon_style: String,
 }
 
 #[derive(Parser)]
@@ -421,10 +437,42 @@ fn formatter_options_from_args(args: &FormatArgs) -> FormatterOptions {
     } else {
         None
     };
+
+    let indent_style = if args.indent.eq_ignore_ascii_case("tabs") {
+        IndentStyle::Tabs
+    } else if args.indent.eq_ignore_ascii_case("spaces") {
+        IndentStyle::Spaces(4)
+    } else {
+        let lower = args.indent.to_ascii_lowercase();
+        if lower.starts_with("spaces") && args.indent.len() >= 6 {
+            let suffix = args.indent[6..].trim_start_matches(|c: char| !c.is_ascii_digit());
+            let n = suffix.parse().unwrap_or(4);
+            IndentStyle::Spaces(n)
+        } else {
+            IndentStyle::Tabs
+        }
+    };
+
+    let brace_style = if args.brace_style.eq_ignore_ascii_case("next-line") {
+        BraceStyle::NextLine
+    } else {
+        BraceStyle::SameLine
+    };
+
+    let semicolon_style = if args.semicolon_style.eq_ignore_ascii_case("omit") {
+        SemicolonStyle::Omit
+    } else {
+        SemicolonStyle::Always
+    };
+
     FormatterOptions {
-        preserve_comments: args.preserve_comments,
+        preserve_comments: args.preserve_comments && !args.canonical,
         parenthesize_expressions: args.parenthesize_expressions,
         annotate_types: args.annotate_types,
         signature_roots,
+        canonical_format: args.canonical,
+        indent_style,
+        brace_style,
+        semicolon_style,
     }
 }

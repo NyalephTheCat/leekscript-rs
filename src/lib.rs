@@ -49,7 +49,8 @@ pub use transform::{transform, ExpandAssignAdd, TransformResult, Transformer};
 
 // Analysis (scope + validation)
 pub use analysis::{
-    analyze, analyze_with_signatures, seed_scope_from_signatures, AnalysisError, AnalysisResult,
+    analyze, analyze_with_signatures, build_scope_extents, scope_at_offset, seed_scope_from_signatures,
+    AnalysisError, AnalysisResult, ResolvedSymbol, ScopeId, ScopeStore,
 };
 
 // Types and visitor

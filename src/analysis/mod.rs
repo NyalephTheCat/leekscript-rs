@@ -12,13 +12,19 @@ mod error;
 mod node_helpers;
 mod scope;
 mod scope_builder;
+mod scope_extents;
 mod type_checker;
 mod type_expr;
 mod validator;
 
 pub use error::AnalysisError;
-pub use node_helpers::binary_expr_rhs;
+pub use node_helpers::{
+    binary_expr_rhs, call_argument_count, class_decl_info, function_decl_info, member_expr_member_name,
+    primary_expr_resolvable_name, var_decl_info, ClassDeclInfo, FunctionDeclInfo, VarDeclInfo,
+    VarDeclKind,
+};
 pub use scope::{ResolvedSymbol, Scope, ScopeId, ScopeKind, ScopeStore, VariableInfo, VariableKind};
+pub use scope_extents::{build_scope_extents, scope_at_offset};
 pub use scope_builder::ScopeBuilder;
 pub use type_checker::{TypeChecker, TypeMapKey};
 pub use type_expr::{find_type_expr_child, parse_type_expr, TypeExprResult};
@@ -39,6 +45,8 @@ pub struct AnalysisResult {
     pub scope_store: ScopeStore,
     /// Map from expression span (start, end) to inferred type (for formatter type annotations).
     pub type_map: std::collections::HashMap<TypeMapKey, Type>,
+    /// Scope IDs in walk order (for LSP: compute scope at offset from scope-extent list).
+    pub scope_id_sequence: Vec<ScopeId>,
 }
 
 impl AnalysisResult {
@@ -94,6 +102,7 @@ pub fn analyze(root: &SyntaxNode) -> AnalysisResult {
         diagnostics,
         scope_store: builder.store,
         type_map,
+        scope_id_sequence: builder.scope_id_sequence,
     }
 }
 
@@ -385,6 +394,7 @@ pub fn analyze_with_signatures(
         diagnostics,
         scope_store: builder.store,
         type_map,
+        scope_id_sequence: builder.scope_id_sequence,
     }
 }
 

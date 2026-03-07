@@ -1,7 +1,7 @@
-//! Format driver: emits the syntax tree to a string (round-trip).
+//! Format driver: emits the syntax tree to a string (round-trip or canonical).
 //!
-//! Uses sipha's emit API for a single canonical tree-to-string path when no extras are
-//! requested. With `parenthesize_expressions` or `annotate_types`, uses a custom walk.
+//! Uses sipha's emit API for round-trip when no extras are requested. With
+//! `canonical_format`, `parenthesize_expressions`, or `annotate_types`, uses a custom walk.
 
 use sipha::emit::{syntax_root_to_string, EmitOptions};
 use sipha::red::{SyntaxNode, SyntaxToken};
@@ -13,7 +13,7 @@ use crate::syntax::Kind;
 use crate::types::Type;
 use crate::visitor::{walk, Visitor, WalkResult};
 
-use super::options::FormatterOptions;
+use super::options::{BraceStyle, FormatterOptions, IndentStyle, SemicolonStyle};
 
 /// Compound expression node kinds that get parentheses when `parenthesize_expressions` is true.
 /// We wrap nodes that contain the *entire* expression in the AST:
@@ -33,10 +33,13 @@ fn is_expression_node(kind: Kind) -> bool {
 }
 
 /// Print the syntax tree to a string.
-/// When `parenthesize_expressions` or `annotate_types` is set, runs a custom walk that
-/// may add parentheses and/or type comments; otherwise uses sipha's emit API.
+/// When `canonical_format`, `parenthesize_expressions`, or `annotate_types` is set, runs a custom walk;
+/// otherwise uses sipha's emit API for round-trip.
 #[must_use]
 pub fn format(root: &SyntaxNode, options: &FormatterOptions) -> String {
+    if options.canonical_format {
+        return format_canonical(root, options);
+    }
     if options.parenthesize_expressions || options.annotate_types {
         let type_map = if options.annotate_types {
             let result = if let Some(ref roots) = options.signature_roots {
@@ -55,6 +58,169 @@ pub fn format(root: &SyntaxNode, options: &FormatterOptions) -> String {
             skip_kind: Some(Kind::TokEof.into_syntax_kind()),
         };
         syntax_root_to_string(root, &emit_opts)
+    }
+}
+
+/// Canonical format: normalize indentation, braces, semicolons. Trivia (comments/whitespace) is not emitted.
+fn format_canonical(root: &SyntaxNode, options: &FormatterOptions) -> String {
+    let mut driver = CanonicalFormatDriver {
+        options,
+        out: String::new(),
+        indent_depth: 0,
+        need_newline: false,
+        statement_semicolon_stack: Vec::new(),
+        last_token_ends_word: false,
+    };
+    let walk_opts = WalkOptions::full();
+    let _ = walk(root, &mut driver, &walk_opts);
+    driver.out
+}
+
+/// True if the token text looks like a word (ident/number) that could run into the next token.
+fn token_ends_word(text: &str) -> bool {
+    let c = text.chars().last().unwrap_or(' ');
+    c.is_alphanumeric() || c == '_'
+}
+
+/// True if the token text starts like a word (ident/number).
+fn token_starts_word(text: &str) -> bool {
+    let c = text.chars().next().unwrap_or(' ');
+    c.is_alphanumeric() || c == '_' || c == '"' || c == '\''
+}
+
+/// Nodes after which we may need to emit a semicolon (optional in grammar).
+fn is_statement_with_optional_semicolon(kind: Kind) -> bool {
+    matches!(
+        kind,
+        Kind::NodeVarDecl
+            | Kind::NodeExprStmt
+            | Kind::NodeReturnStmt
+            | Kind::NodeBreakStmt
+            | Kind::NodeContinueStmt
+    )
+}
+
+/// Canonical format driver: emits tokens with normalized newlines and indentation.
+struct CanonicalFormatDriver<'a> {
+    options: &'a FormatterOptions,
+    out: String,
+    indent_depth: usize,
+    need_newline: bool,
+    /// Stack of "did we see semicolon for this statement" for optional-semicolon statements.
+    statement_semicolon_stack: Vec<bool>,
+    /// Last non-trivia token text, to decide if we need a space before the next token.
+    last_token_ends_word: bool,
+}
+
+impl CanonicalFormatDriver<'_> {
+    fn emit_indent(&mut self) {
+        match self.options.indent_style {
+            IndentStyle::Tabs => {
+                for _ in 0..self.indent_depth {
+                    self.out.push('\t');
+                }
+            }
+            IndentStyle::Spaces(n) => {
+                let spaces = n.max(1).min(8) as usize;
+                for _ in 0..self.indent_depth {
+                    for _ in 0..spaces {
+                        self.out.push(' ');
+                    }
+                }
+            }
+        }
+    }
+
+    fn maybe_emit_newline_and_indent(&mut self) {
+        if self.need_newline {
+            self.out.push('\n');
+            self.emit_indent();
+            self.need_newline = false;
+        }
+    }
+}
+
+impl Visitor for CanonicalFormatDriver<'_> {
+    fn enter_node(&mut self, node: &SyntaxNode) -> WalkResult {
+        if let Some(kind) = node.kind_as::<Kind>() {
+            if is_statement_with_optional_semicolon(kind) {
+                self.statement_semicolon_stack.push(false);
+            }
+        }
+        WalkResult::Continue(())
+    }
+
+    fn visit_token(&mut self, token: &SyntaxToken) -> WalkResult {
+        let tok_kind = Kind::from_syntax_kind(token.kind());
+        if tok_kind == Some(Kind::TokEof) {
+            return WalkResult::Continue(());
+        }
+        if token.is_trivia() {
+            return WalkResult::Continue(());
+        }
+        self.maybe_emit_newline_and_indent();
+
+        let text = token.text();
+        // Emit space between tokens that would otherwise run together (e.g. "var" "x" -> "var x").
+        if self.last_token_ends_word && token_starts_word(text) {
+            self.out.push(' ');
+        }
+
+        if tok_kind == Some(Kind::TokBraceR) {
+            self.out.push('\n');
+            if self.indent_depth > 0 {
+                self.indent_depth -= 1;
+            }
+            self.emit_indent();
+            self.out.push_str(text);
+            self.last_token_ends_word = false;
+            self.need_newline = true;
+            return WalkResult::Continue(());
+        }
+        if tok_kind == Some(Kind::TokBraceL) {
+            if self.options.brace_style == BraceStyle::NextLine {
+                self.out.push('\n');
+                self.emit_indent();
+            }
+            self.out.push_str(text);
+            self.last_token_ends_word = false;
+            self.indent_depth += 1;
+            self.need_newline = true;
+            return WalkResult::Continue(());
+        }
+        if tok_kind == Some(Kind::TokSemi) {
+            if let Some(seen) = self.statement_semicolon_stack.last_mut() {
+                *seen = true;
+            }
+            if self.options.semicolon_style == SemicolonStyle::Always {
+                self.out.push_str(text);
+            }
+            self.last_token_ends_word = false;
+            self.need_newline = true;
+            return WalkResult::Continue(());
+        }
+
+        self.out.push_str(text);
+        self.last_token_ends_word = token_ends_word(text);
+        if text == "}" {
+            self.need_newline = true;
+        }
+        WalkResult::Continue(())
+    }
+
+    fn leave_node(&mut self, node: &SyntaxNode) -> WalkResult {
+        if let Some(kind) = node.kind_as::<Kind>() {
+            if is_statement_with_optional_semicolon(kind) {
+                if let Some(had_semi) = self.statement_semicolon_stack.pop() {
+                    if self.options.semicolon_style == SemicolonStyle::Always && !had_semi {
+                        self.maybe_emit_newline_and_indent();
+                        self.out.push(';');
+                        self.need_newline = true;
+                    }
+                }
+            }
+        }
+        WalkResult::Continue(())
     }
 }
 
@@ -256,6 +422,7 @@ mod tests {
             parenthesize_expressions: false,
             annotate_types: false,
             signature_roots: None,
+            ..FormatterOptions::default()
         };
         let formatted = format(&root, &options);
         assert!(!formatted.is_empty());
@@ -273,6 +440,7 @@ mod tests {
             parenthesize_expressions: true,
             annotate_types: false,
             signature_roots: None,
+            ..FormatterOptions::default()
         };
         let formatted = format(&root, &options);
         // Should add parentheses around compound expressions (exact shape depends on grammar associativity)
@@ -292,9 +460,29 @@ mod tests {
             parenthesize_expressions: false,
             annotate_types: true,
             signature_roots: None,
+            ..FormatterOptions::default()
         };
         let formatted = format(&root, &options);
         // Should add type comments for expressions (e.g. integer for literals and result)
         assert!(formatted.contains("/* integer */"));
+    }
+
+    #[test]
+    fn format_canonical_indent() {
+        let source = "var x=1;function f(){return x;}";
+        let root = parse(source).unwrap().expect("parse");
+        let options = FormatterOptions {
+            canonical_format: true,
+            indent_style: super::IndentStyle::Tabs,
+            semicolon_style: super::SemicolonStyle::Always,
+            ..FormatterOptions::default()
+        };
+        let formatted = format(&root, &options);
+        assert!(formatted.contains("var"));
+        assert!(formatted.contains("x"));
+        assert!(formatted.contains("1"));
+        assert!(formatted.contains(';'));
+        assert!(formatted.contains('\t'), "canonical format should use tabs: {:?}", formatted);
+        assert!(formatted.contains("return"));
     }
 }

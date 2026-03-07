@@ -201,6 +201,14 @@ impl Type {
         if self == other {
             return true;
         }
+        // Unknown type (e.g. from a call with no signature) is assignable to any target (gradual typing).
+        if matches!(other, Type::Any) {
+            return true;
+        }
+        // Assigning a union A|B to T is valid when every member of the union is assignable to T.
+        if let Type::Compound(otypes) = other {
+            return otypes.iter().all(|o| self.assignable_from(o));
+        }
         match self {
             Type::Any => true,
             Type::Error | Type::Warning => false,
@@ -326,6 +334,9 @@ mod tests {
         assert!(Type::string().assignable_from(&Type::string()));
         assert!(Type::any().assignable_from(&Type::int()));
         assert!(Type::any().assignable_from(&Type::string()));
+        // Unknown (any) is assignable to any target (gradual typing).
+        assert!(Type::int().assignable_from(&Type::any()));
+        assert!(Type::string().assignable_from(&Type::any()));
     }
 
     #[test]

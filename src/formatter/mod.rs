@@ -8,4 +8,4 @@ mod driver;
 mod options;
 
 pub use driver::{format, FormatDriver};
-pub use options::FormatterOptions;
+pub use options::{BraceStyle, FormatterOptions, IndentStyle, SemicolonStyle};

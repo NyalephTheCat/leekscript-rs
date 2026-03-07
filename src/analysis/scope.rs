@@ -117,6 +117,12 @@ impl Scope {
         self.variables.contains_key(name)
     }
 
+    /// Variable names in this scope (for LSP completion).
+    #[must_use]
+    pub fn variable_names(&self) -> Vec<String> {
+        self.variables.keys().cloned().collect()
+    }
+
     /// Add a global name (main scope only).
     pub fn add_global(&mut self, name: String) {
         if let Some(g) = &mut self.globals {
@@ -168,6 +174,33 @@ impl Scope {
     #[must_use] 
     pub fn has_global(&self, name: &str) -> bool {
         self.globals.as_ref().is_some_and(|g| g.contains(name))
+    }
+
+    /// Function names in this scope (main only; for LSP completion).
+    #[must_use]
+    pub fn function_names(&self) -> Vec<String> {
+        self.functions
+            .as_ref()
+            .map(|m| m.keys().cloned().collect())
+            .unwrap_or_default()
+    }
+
+    /// Class names in this scope (main only; for LSP completion).
+    #[must_use]
+    pub fn class_names(&self) -> Vec<String> {
+        self.classes
+            .as_ref()
+            .map(|m| m.keys().cloned().collect())
+            .unwrap_or_default()
+    }
+
+    /// Global variable names in this scope (main only; for LSP completion).
+    #[must_use]
+    pub fn global_names(&self) -> Vec<String> {
+        self.globals
+            .as_ref()
+            .map(|g| g.iter().cloned().collect())
+            .unwrap_or_default()
     }
 
     /// Whether any overload/default set for this name accepts the given argument count.

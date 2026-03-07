@@ -23,11 +23,14 @@ cargo run --bin leekscript -- format --in-place script.leek
 # Check if formatting would change (exit 1 if so)
 cargo run --bin leekscript -- format --check script.leek
 
-# Validate syntax (exit 0 if valid)
+# Validate syntax and run semantic analysis (scopes, types, deprecations)
 cargo run --bin leekscript -- validate script.leek
+
+# Canonical format: normalize indentation, braces, semicolons
+cargo run --bin leekscript -- format --canonical script.leek
 ```
 
-The format command prints the syntax tree as-is (no reformatting). Use `--preserve-comments` (default) to include comments and whitespace. See `leekscript format --help`.
+Format: by default prints the syntax tree as-is (round-trip). Use `--canonical` to normalize layout (indent, brace style, semicolons). Use `--preserve-comments` (default) to include comments and whitespace. See `leekscript format --help`.
 
 ## Library usage
 
