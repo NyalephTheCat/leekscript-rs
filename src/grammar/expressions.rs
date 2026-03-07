@@ -320,16 +320,18 @@ pub fn add_expr_power(g: &mut sipha::builder::GrammarBuilder) {
 /// Mul: `expr_power` ( * / \ % `expr_power` )*
 pub fn add_expr_mul(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("expr_mul", |g: &mut sipha::builder::GrammarBuilder| {
-        g.call("expr_power");
-        g.zero_or_more(|g| {
-            g.node(Kind::NodeBinaryExpr, |g| {
-                g.choices(vec![
-                    Box::new(|g| { g.call("op_star"); }),
-                    Box::new(|g| { g.call("op_slash"); }),
-                    Box::new(|g| { g.call("op_backslash"); }),
-                    Box::new(|g| { g.call("op_percent"); }),
-                ]);
-                g.node_with_field(Kind::NodeExpr, "rhs", |g| { g.call("expr_power"); });
+        g.node(Kind::NodeBinaryLevel, |g| {
+            g.call("expr_power");
+            g.zero_or_more(|g| {
+                g.node(Kind::NodeBinaryExpr, |g| {
+                    g.choices(vec![
+                        Box::new(|g| { g.call("op_star"); }),
+                        Box::new(|g| { g.call("op_slash"); }),
+                        Box::new(|g| { g.call("op_backslash"); }),
+                        Box::new(|g| { g.call("op_percent"); }),
+                    ]);
+                    g.node_with_field(Kind::NodeExpr, "rhs", |g| { g.call("expr_power"); });
+                });
             });
         });
     });
@@ -338,14 +340,16 @@ pub fn add_expr_mul(g: &mut sipha::builder::GrammarBuilder) {
 /// Add: `expr_mul` ( + - `expr_mul` )*
 pub fn add_expr_add(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("expr_add", |g: &mut sipha::builder::GrammarBuilder| {
-        g.call("expr_mul");
-        g.zero_or_more(|g| {
-            g.node(Kind::NodeBinaryExpr, |g| {
-                g.choices(vec![
-                    Box::new(|g| { g.call("op_plus"); }),
-                    Box::new(|g| { g.call("op_minus"); }),
-                ]);
-                g.call("expr_mul");
+        g.node(Kind::NodeBinaryLevel, |g| {
+            g.call("expr_mul");
+            g.zero_or_more(|g| {
+                g.node(Kind::NodeBinaryExpr, |g| {
+                    g.choices(vec![
+                        Box::new(|g| { g.call("op_plus"); }),
+                        Box::new(|g| { g.call("op_minus"); }),
+                    ]);
+                    g.call("expr_mul");
+                });
             });
         });
     });
@@ -354,11 +358,13 @@ pub fn add_expr_add(g: &mut sipha::builder::GrammarBuilder) {
 /// Interval: `expr_add` ( .. `expr_interval` )* (range, e.g. 1..10)
 pub fn add_expr_interval(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("expr_interval", |g: &mut sipha::builder::GrammarBuilder| {
-        g.call("expr_add");
-        g.zero_or_more(|g| {
-            g.node(Kind::NodeInterval, |g| {
-                g.call("dot_dot");
-                g.call("expr_interval");
+        g.node(Kind::NodeBinaryLevel, |g| {
+            g.call("expr_add");
+            g.zero_or_more(|g| {
+                g.node(Kind::NodeInterval, |g| {
+                    g.call("dot_dot");
+                    g.call("expr_interval");
+                });
             });
         });
     });
@@ -385,15 +391,17 @@ pub fn add_expr_compare(g: &mut sipha::builder::GrammarBuilder) {
 /// Equality: `expr_compare` ( === !== == != `expr_compare` )*
 pub fn add_expr_equality(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("expr_equality", |g: &mut sipha::builder::GrammarBuilder| {
-        g.call("expr_compare");
-        g.zero_or_more(|g| {
-            g.node(Kind::NodeBinaryExpr, |g| {
-                g.choices(vec![
-                    Box::new(|g| { g.call("op_strict_eq"); }),
-                    Box::new(|g| { g.call("op_neq_or_strict"); }),
-                    Box::new(|g| { g.call("op_eq"); }),
-                ]);
-                g.call("expr_compare");
+        g.node(Kind::NodeBinaryLevel, |g| {
+            g.call("expr_compare");
+            g.zero_or_more(|g| {
+                g.node(Kind::NodeBinaryExpr, |g| {
+                    g.choices(vec![
+                        Box::new(|g| { g.call("op_strict_eq"); }),
+                        Box::new(|g| { g.call("op_neq_or_strict"); }),
+                        Box::new(|g| { g.call("op_eq"); }),
+                    ]);
+                    g.call("expr_compare");
+                });
             });
         });
     });
@@ -415,11 +423,13 @@ pub fn add_expr_in(g: &mut sipha::builder::GrammarBuilder) {
 /// Instanceof: `expr_in` ( instanceof `expr_equality` )*
 pub fn add_expr_instanceof(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("expr_instanceof", |g: &mut sipha::builder::GrammarBuilder| {
-        g.call("expr_in");
-        g.zero_or_more(|g| {
-            g.node(Kind::NodeBinaryExpr, |g| {
-                g.call("instanceof_kw");
-                g.call("expr_equality");
+        g.node(Kind::NodeBinaryLevel, |g| {
+            g.call("expr_in");
+            g.zero_or_more(|g| {
+                g.node(Kind::NodeBinaryExpr, |g| {
+                    g.call("instanceof_kw");
+                    g.call("expr_equality");
+                });
             });
         });
     });
@@ -428,14 +438,16 @@ pub fn add_expr_instanceof(g: &mut sipha::builder::GrammarBuilder) {
 /// And: `expr_instanceof` ( ( && | and ) `expr_instanceof` )*
 pub fn add_expr_and(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("expr_and", |g: &mut sipha::builder::GrammarBuilder| {
-        g.call("expr_instanceof");
-        g.zero_or_more(|g| {
-            g.node(Kind::NodeBinaryExpr, |g| {
-                g.choices(vec![
-                    Box::new(|g| { g.call("op_amp_amp"); }),
-                    Box::new(|g| { g.call("and_kw"); }),
-                ]);
-                g.call("expr_instanceof");
+        g.node(Kind::NodeBinaryLevel, |g| {
+            g.call("expr_instanceof");
+            g.zero_or_more(|g| {
+                g.node(Kind::NodeBinaryExpr, |g| {
+                    g.choices(vec![
+                        Box::new(|g| { g.call("op_amp_amp"); }),
+                        Box::new(|g| { g.call("and_kw"); }),
+                    ]);
+                    g.call("expr_instanceof");
+                });
             });
         });
     });
@@ -444,14 +456,16 @@ pub fn add_expr_and(g: &mut sipha::builder::GrammarBuilder) {
 /// Or: `expr_and` ( ( || | or ) `expr_and` )*
 pub fn add_expr_or(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("expr_or", |g: &mut sipha::builder::GrammarBuilder| {
-        g.call("expr_and");
-        g.zero_or_more(|g| {
-            g.node(Kind::NodeBinaryExpr, |g| {
-                g.choices(vec![
-                    Box::new(|g| { g.call("op_pipe_pipe"); }),
-                    Box::new(|g| { g.call("or_kw"); }),
-                ]);
-                g.call("expr_and");
+        g.node(Kind::NodeBinaryLevel, |g| {
+            g.call("expr_and");
+            g.zero_or_more(|g| {
+                g.node(Kind::NodeBinaryExpr, |g| {
+                    g.choices(vec![
+                        Box::new(|g| { g.call("op_pipe_pipe"); }),
+                        Box::new(|g| { g.call("or_kw"); }),
+                    ]);
+                    g.call("expr_and");
+                });
             });
         });
     });
@@ -460,11 +474,13 @@ pub fn add_expr_or(g: &mut sipha::builder::GrammarBuilder) {
 /// Xor: `expr_or` ( xor `expr_xor` )*
 pub fn add_expr_xor(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("expr_xor", |g: &mut sipha::builder::GrammarBuilder| {
-        g.call("expr_or");
-        g.zero_or_more(|g| {
-            g.node(Kind::NodeBinaryExpr, |g| {
-                g.call("xor_kw");
-                g.call("expr_xor");
+        g.node(Kind::NodeBinaryLevel, |g| {
+            g.call("expr_or");
+            g.zero_or_more(|g| {
+                g.node(Kind::NodeBinaryExpr, |g| {
+                    g.call("xor_kw");
+                    g.call("expr_xor");
+                });
             });
         });
     });

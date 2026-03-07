@@ -19,6 +19,10 @@ const EXIT_SUCCESS: i32 = 0;
 /// Exit code for failure (syntax error, I/O error, etc.).
 const EXIT_FAILURE: i32 = 1;
 
+/// Default directory for .sig files when no `--stdlib-dir` or `--signatures` are given.
+/// Override with env var `LEEKSCRIPT_SIGNATURES_DIR`.
+const DEFAULT_SIGNATURES_DIR: &str = "examples/signatures";
+
 #[derive(Parser)]
 #[command(name = "leekscript")]
 #[command(author, version, about = "Format, validate, and manipulate LeekScript source code")]
@@ -56,6 +60,22 @@ pub struct FormatArgs {
     /// Include comments and whitespace in output (default: true).
     #[arg(long, default_value = "true")]
     pub preserve_comments: bool,
+
+    /// Wrap expressions in parentheses to make precedence explicit.
+    #[arg(long)]
+    pub parenthesize_expressions: bool,
+
+    /// Add block comments with inferred types after expressions and variables.
+    #[arg(long)]
+    pub annotate_types: bool,
+
+    /// When using --annotate-types: directory containing .sig files. All *.sig are loaded. Default: LEEKSCRIPT_SIGNATURES_DIR or examples/signatures.
+    #[arg(long, value_name = "DIR")]
+    pub stdlib_dir: Option<std::path::PathBuf>,
+
+    /// When using --annotate-types: signature file(s) to load (function/global/class API). May be repeated.
+    #[arg(long = "signatures", value_name = "FILE")]
+    pub signature_files: Vec<std::path::PathBuf>,
 }
 
 #[derive(Parser)]
@@ -68,7 +88,7 @@ pub struct ValidateArgs {
     #[arg(long)]
     pub json: bool,
 
-    /// Path to a directory containing .sig files (e.g. stdlib). All *.sig in the dir are loaded.
+    /// Path to a directory containing .sig files. All *.sig in the dir are loaded. Default: LEEKSCRIPT_SIGNATURES_DIR or examples/signatures.
     #[arg(long, value_name = "DIR")]
     pub stdlib_dir: Option<std::path::PathBuf>,
 
@@ -214,6 +234,7 @@ pub fn run_format(args: &FormatArgs) -> i32 {
                     eprintln!("leekscript format: write error: {e}");
                     return EXIT_FAILURE;
                 }
+                eprintln!("leekscript format: wrote {} ({} bytes)", out_path.display(), formatted.len());
                 return EXIT_SUCCESS;
             }
 
@@ -271,14 +292,26 @@ fn load_signatures_from_files(paths: &[std::path::PathBuf]) -> Vec<sipha::red::S
     roots
 }
 
-/// If no signature options were given, try default examples/signatures directory (stdlib_*.sig).
+/// If no signature options were given, use the default .sig path: `LEEKSCRIPT_SIGNATURES_DIR` env var if set,
+/// else `DEFAULT_SIGNATURES_DIR`, else `leekscript-rs/examples/signatures` (when run from workspace root).
 fn default_signature_roots() -> Vec<sipha::red::SyntaxNode> {
-    let default_dir = Path::new("examples/signatures");
-    if default_dir.is_dir() {
-        load_signatures_from_dir(default_dir)
+    let candidates: Vec<std::path::PathBuf> = if let Some(ref d) = std::env::var_os("LEEKSCRIPT_SIGNATURES_DIR") {
+        vec![d.into()]
     } else {
-        Vec::new()
+        vec![
+            std::path::PathBuf::from(DEFAULT_SIGNATURES_DIR),
+            std::path::PathBuf::from("leekscript-rs/examples/signatures"),
+        ]
+    };
+    for dir in candidates {
+        if dir.is_dir() {
+            let roots = load_signatures_from_dir(&dir);
+            if !roots.is_empty() {
+                return roots;
+            }
+        }
     }
+    Vec::new()
 }
 
 pub fn run_validate(args: &ValidateArgs) -> i32 {
@@ -366,7 +399,32 @@ pub fn run_validate(args: &ValidateArgs) -> i32 {
 }
 
 fn formatter_options_from_args(args: &FormatArgs) -> FormatterOptions {
+    let signature_roots = if args.annotate_types {
+        let mut roots = Vec::new();
+        if let Some(ref dir) = args.stdlib_dir {
+            roots.extend(load_signatures_from_dir(dir));
+        }
+        if !args.signature_files.is_empty() {
+            roots.extend(load_signatures_from_files(&args.signature_files));
+        }
+        if roots.is_empty()
+            && args.stdlib_dir.is_none()
+            && args.signature_files.is_empty()
+        {
+            roots = default_signature_roots();
+        }
+        if roots.is_empty() {
+            None
+        } else {
+            Some(roots)
+        }
+    } else {
+        None
+    };
     FormatterOptions {
         preserve_comments: args.preserve_comments,
+        parenthesize_expressions: args.parenthesize_expressions,
+        annotate_types: args.annotate_types,
+        signature_roots,
     }
 }

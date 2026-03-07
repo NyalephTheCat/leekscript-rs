@@ -84,6 +84,7 @@ pub enum Kind {
     NodeExpr,
     NodePrimaryExpr,
     NodeBinaryExpr,
+    NodeBinaryLevel, // Wraps full "left op right" for one precedence level (add, mul, etc.)
     NodeUnaryExpr,
     NodeCallExpr,
     NodeMemberExpr,

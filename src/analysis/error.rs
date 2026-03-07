@@ -90,3 +90,15 @@ pub fn wrong_arity_at(span: Span, expected: usize, actual: usize) -> SemanticDia
     );
     SemanticDiagnostic::error(span, message).with_code(AnalysisError::WrongArity.code())
 }
+
+/// Build a type mismatch diagnostic (expected vs got).
+pub fn type_mismatch_at(span: Span, expected: &str, got: &str) -> SemanticDiagnostic {
+    let message = format!("type mismatch: expected {expected}, got {got}");
+    SemanticDiagnostic::error(span, message).with_code(AnalysisError::TypeMismatch.code())
+}
+
+/// Build an invalid cast diagnostic.
+pub fn invalid_cast_at(span: Span, from: &str, to: &str) -> SemanticDiagnostic {
+    let message = format!("invalid cast from {from} to {to}");
+    SemanticDiagnostic::error(span, message).with_code(AnalysisError::TypeMismatch.code())
+}
