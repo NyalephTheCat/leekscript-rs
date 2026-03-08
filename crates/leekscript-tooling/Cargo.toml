@@ -16,5 +16,8 @@ leekscript-core = { path = "../leekscript-core", version = "0.1.0" }
 sipha = { version = "2.0.0", features = ["miette", "emit"] }
 toml = "0.8"
 
+[dev-dependencies]
+sipha-diff = "2.0.0"
+
 [lints.rust]
 unsafe_code = "forbid"

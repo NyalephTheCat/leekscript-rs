@@ -215,7 +215,9 @@ impl DocumentAnalysis {
         let mut definition_map = HashMap::new();
         let mut doc_map = HashMap::new();
         #[allow(clippy::type_complexity)]
-        let mut include_doc_maps: Option<HashMap<PathBuf, HashMap<(u32, u32), DocComment>>> = None;
+        let mut include_doc_maps: Option<
+            HashMap<PathBuf, HashMap<(u32, u32), DocComment>>,
+        > = None;
         let mut include_tree: Option<IncludeTree> = None;
         let mut main_path_buf: Option<PathBuf> = main_path.map(Path::to_path_buf);
         let mut root: Option<SyntaxNode> = None;
