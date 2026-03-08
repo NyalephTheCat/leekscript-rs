@@ -32,20 +32,5 @@ jobs:
       - name: Run tests
         run: cargo test -p leekscript-rs --all-features
 
-      - name: Publish leekscript-core
-        run: cargo publish -p leekscript-core
-
-      - name: Publish leekscript-analysis
-        run: cargo publish -p leekscript-analysis
-
-      - name: Publish leekscript-document
-        run: cargo publish -p leekscript-document
-
-      - name: Publish leekscript-tooling
-        run: cargo publish -p leekscript-tooling
-
       - name: Publish leekscript-rs
         run: cargo publish -p leekscript-rs
-
-      - name: Publish leekscript-lsp
-        run: cargo publish -p leekscript-lsp
