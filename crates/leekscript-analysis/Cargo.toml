@@ -13,6 +13,3 @@ sipha-analysis = "2.0.0"
 
 [lints.rust]
 unsafe_code = "forbid"
-
-[dev-dependencies]
-leekscript-document = { path = "../leekscript-document", version = "0.1.0" }
