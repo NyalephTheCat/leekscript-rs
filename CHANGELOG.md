@@ -7,6 +7,8 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+## [0.1.1-alpha.1] - 2025-03-08
+
 ### Added
 
 - **Documentation**
@@ -42,8 +44,24 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Release**
   - `Cargo.toml`: description, license, repository, keywords, categories; feature docs for `lsp`, `transform`, `utf16`.
   - `CHANGELOG.md` (this file).
-  - Version bump to 0.1.1-alpha.0.
+  - Version bump to 0.1.1-alpha.1.
 
 ### Changed
 
 - Formatter options from CLI: when a config file is present in the input file’s directory, its indent/brace/semicolon style are used when the corresponding CLI flags are left at their defaults.
+
+## [0.1.0]
+
+### Added
+
+- LeekScript parser (PEG-based, via sipha), producing a typed AST.
+- Semantic analysis: type checking, undefined variable/function detection, include resolution.
+- Formatter with configurable indent, brace style, and semicolons.
+- CLI: `leekscript format`, `leekscript validate`, and related subcommands.
+- LSP-oriented features (optional): `lsp` and `utf16` features for diagnostics and line/column in UTF-16.
+- Support for `#include` and signature (`.sig`) files for function/global declarations.
+- Crate layout: leekscript-core, leekscript-analysis, leekscript-document, leekscript-tooling.
+
+[Unreleased]: https://github.com/leek-wars/leekscript-rs/compare/v0.1.1-alpha.1...HEAD
+[0.1.1-alpha.1]: https://github.com/leek-wars/leekscript-rs/releases/tag/v0.1.1-alpha.1
+[0.1.0]: https://github.com/leek-wars/leekscript-rs/releases/tag/v0.1.0
