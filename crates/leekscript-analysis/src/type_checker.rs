@@ -9,7 +9,7 @@ use std::collections::HashMap;
 /// Key for type map: (span.start, span.end) for exact span lookup.
 ///
 /// When multiple nodes share the same span (e.g. an identifier that is both a primary expr and
-/// a var decl name), the type_map may store one entry per span; LSP/hover should prefer the
+/// a var decl name), the `type_map` may store one entry per span; LSP/hover should prefer the
 /// innermost or declaration node as appropriate (e.g. use `node_at_offset` and look up the
 /// node's text range).
 pub type TypeMapKey = (u32, u32);
@@ -92,7 +92,7 @@ impl<'a> TypeChecker<'a> {
         }
     }
 
-    /// If `node` is inside a function (anonymous, lambda, or named), returns that function node (NodeAnonFn or NodeFunctionDecl).
+    /// If `node` is inside a function (anonymous, lambda, or named), returns that function node (`NodeAnonFn` or `NodeFunctionDecl`).
     fn enclosing_function(&self, node: &SyntaxNode) -> Option<SyntaxNode> {
         for anc in node.ancestors(self.root) {
             if anc.kind_as::<Kind>() == Some(Kind::NodeAnonFn)
@@ -110,7 +110,7 @@ impl<'a> TypeChecker<'a> {
             .root
             .find_all_nodes(Kind::NodeFunctionDecl.into_syntax_kind())
         {
-            if function_decl_info(&decl).map_or(false, |info| info.name == name) {
+            if function_decl_info(&decl).is_some_and(|info| info.name == name) {
                 let r = decl.text_range();
                 if let Some(ty) = self.inferred_return_types.get(&(r.start, r.end)) {
                     return Some(ty.clone());
@@ -824,7 +824,7 @@ fn infer_primary_type(node: &SyntaxNode) -> Type {
 }
 
 /// Key and value types for for-in loop variables from iterable type.
-/// First variable gets key_ty, second (if present) gets value_ty.
+/// First variable gets `key_ty`, second (if present) gets `value_ty`.
 fn iterable_key_value_types(iterable: &Type) -> (Type, Type) {
     match iterable {
         Type::Array(elem) => (Type::int(), *elem.clone()),
@@ -859,7 +859,7 @@ fn narrow_return_by_first_arg(return_type: Type, arg_types: &[Type]) -> Type {
     }
 }
 
-/// Check binary operator: (result_type, optional (span, message) for error).
+/// Check binary operator: (`result_type`, optional (span, message) for error).
 fn check_binary_op(op: &str, left: &Type, right: &Type) -> (Option<Type>, Option<(Span, String)>) {
     let numeric_ops = ["+", "-", "*", "/", "\\", "%", "**"];
     let compare_ops = ["<", "<=", ">", ">="];
@@ -936,10 +936,7 @@ fn check_binary_op(op: &str, left: &Type, right: &Type) -> (Option<Type>, Option
                 Some(Type::real()),
                 Some((
                     Span::new(0, 0),
-                    format!(
-                        "operator `{op}` requires number, got {} and {}",
-                        left, right
-                    ),
+                    format!("operator `{op}` requires number, got {left} and {right}"),
                 )),
             );
         }
@@ -956,7 +953,7 @@ fn check_binary_op(op: &str, left: &Type, right: &Type) -> (Option<Type>, Option
                 Some(Type::bool()),
                 Some((
                     Span::new(0, 0),
-                    format!("comparison requires number, got {} and {}", left, right),
+                    format!("comparison requires number, got {left} and {right}"),
                 )),
             );
         }
@@ -977,7 +974,7 @@ fn check_binary_op(op: &str, left: &Type, right: &Type) -> (Option<Type>, Option
     }
 }
 
-/// Check unary operator: (result_type, optional (span, message)).
+/// Check unary operator: (`result_type`, optional (span, message)).
 fn check_unary_op(op: &str, operand: &Type) -> (Option<Type>, Option<(Span, String)>) {
     match op {
         "-" | "+" => {

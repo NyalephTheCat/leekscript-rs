@@ -71,7 +71,7 @@ pub struct FormatArgs {
     #[arg(long)]
     pub annotate_types: bool,
 
-    /// When using --annotate-types: directory containing .sig files. All *.sig are loaded. Default: LEEKSCRIPT_SIGNATURES_DIR or examples/signatures.
+    /// When using --annotate-types: directory containing .sig files. All *.sig are loaded. Default: `LEEKSCRIPT_SIGNATURES_DIR` or examples/signatures.
     #[arg(long, value_name = "DIR")]
     pub stdlib_dir: Option<std::path::PathBuf>,
 
@@ -106,7 +106,7 @@ pub struct ValidateArgs {
     #[arg(long)]
     pub json: bool,
 
-    /// Path to a directory containing .sig files. All *.sig in the dir are loaded. Default: LEEKSCRIPT_SIGNATURES_DIR or examples/signatures.
+    /// Path to a directory containing .sig files. All *.sig in the dir are loaded. Default: `LEEKSCRIPT_SIGNATURES_DIR` or examples/signatures.
     #[arg(long, value_name = "DIR")]
     pub stdlib_dir: Option<std::path::PathBuf>,
 
@@ -145,7 +145,7 @@ pub fn read_and_parse(input: Option<&Path>) -> ParseOutcome {
         Ok(s) => s,
         Err(e) => return ParseOutcome::IoError(e),
     };
-    let path_ref = input.map(|p| p.as_ref());
+    let path_ref = input.map(|p| p);
     let tree = match build_include_tree(&source, path_ref) {
         Ok(t) => t,
         Err(e) => return ParseOutcome::IncludeError(e),

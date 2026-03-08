@@ -102,24 +102,18 @@ pub fn build_include_tree(
     let base_dir = base_path
         .and_then(|p| p.parent())
         .unwrap_or_else(|| Path::new("."));
-    let current_path = base_path
-        .map(Path::to_path_buf)
-        .unwrap_or_else(PathBuf::new);
+    let current_path = base_path.map(Path::to_path_buf).unwrap_or_default();
     let mut visited = std::collections::HashSet::new();
-    build_include_tree_impl(source, base_dir, &current_path, &mut visited)
+    build_include_tree_impl(source, base_dir, current_path.as_path(), &mut visited)
 }
 
 fn build_include_tree_impl(
     source: &str,
     base_dir: &Path,
-    current_path: &PathBuf,
+    current_path: &Path,
     visited: &mut std::collections::HashSet<PathBuf>,
 ) -> Result<IncludeTree, IncludeError> {
-    let root = match parse(source) {
-        Ok(Some(r)) => Some(r),
-        Ok(None) => None,
-        Err(_) => None,
-    };
+    let root = parse(source).ok().flatten();
 
     let include_paths = root
         .as_ref()
@@ -128,7 +122,7 @@ fn build_include_tree_impl(
 
     let mut includes = Vec::with_capacity(include_paths.len());
     for path_str in include_paths {
-        let resolved = resolve_path(base_dir, &path_str)?;
+        let resolved = resolve_path(base_dir, &path_str);
         let content = std::fs::read_to_string(&resolved).map_err(|e| {
             let msg = match e.kind() {
                 std::io::ErrorKind::NotFound => format!("file not found: {}", resolved.display()),
@@ -145,17 +139,18 @@ fn build_include_tree_impl(
         if !visited.insert(canonical.clone()) {
             return Err(IncludeError::CircularInclude {
                 path: canonical,
-                included_from: Some(current_path.clone()),
+                included_from: Some(current_path.to_path_buf()),
             });
         }
         let child_base = resolved.parent().unwrap_or(base_dir);
-        let child_tree = build_include_tree_impl(&content, child_base, &resolved, visited)?;
+        let child_tree =
+            build_include_tree_impl(&content, child_base, resolved.as_path(), visited)?;
         visited.remove(&canonical);
         includes.push((resolved, child_tree));
     }
 
     Ok(IncludeTree {
-        path: current_path.clone(),
+        path: current_path.to_path_buf(),
         source: source.to_string(),
         root,
         includes,
@@ -174,7 +169,7 @@ fn collect_include_paths(root: &SyntaxNode, source: &str) -> Vec<String> {
     out
 }
 
-/// Collect (start_byte, end_byte, path_string) for each `include("...")` in the file.
+/// Collect (`start_byte`, `end_byte`, `path_string`) for each `include("...")` in the file.
 /// Used by the LSP to provide document links and go-to-definition on include paths.
 #[must_use]
 pub fn collect_include_path_ranges(root: &SyntaxNode, source: &str) -> Vec<(u32, u32, String)> {
@@ -193,7 +188,7 @@ pub fn collect_include_path_ranges(root: &SyntaxNode, source: &str) -> Vec<(u32,
     out
 }
 
-/// Extract the path string from a NodeInclude (first TokString token, unquoted).
+/// Extract the path string from a `NodeInclude` (first `TokString` token, unquoted).
 fn include_path_from_node(node: &SyntaxNode, source_bytes: &[u8]) -> Option<String> {
     let token = node
         .descendant_tokens()
@@ -261,15 +256,17 @@ fn next_char_boundary(bytes: &[u8], i: usize) -> usize {
     j
 }
 
-fn resolve_path(base_dir: &Path, path_str: &str) -> Result<PathBuf, IncludeError> {
+fn resolve_path(base_dir: &Path, path_str: &str) -> PathBuf {
     let path = Path::new(path_str);
     if path.is_absolute() {
-        return Ok(path.to_path_buf());
+        path.to_path_buf()
+    } else {
+        base_dir.join(path)
     }
-    Ok(base_dir.join(path))
 }
 
 /// Flatten the tree into (path, source) for all files (root first, then includes depth-first).
+#[must_use]
 pub fn all_files(tree: &IncludeTree) -> Vec<(PathBuf, &str)> {
     let mut out = vec![(tree.path.clone(), tree.source.as_str())];
     for (_, child) in &tree.includes {

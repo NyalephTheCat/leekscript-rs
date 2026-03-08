@@ -2,7 +2,7 @@
 //!
 //! Used for program type annotations (var decl, param, return, cast) and for
 //! signature files (stdlib function/global types). Both grammars produce
-//! `NodeTypeExpr` with the same shape: type_optional ( | type_optional )*.
+//! `NodeTypeExpr` with the same shape: `type_optional` ( | `type_optional` )*.
 
 use sipha::red::{SyntaxElement, SyntaxNode};
 use sipha::types::{IntoSyntaxKind, Span};
@@ -233,21 +233,19 @@ fn parse_primary_type(name: &str, type_params: Option<&SyntaxNode>) -> Result<Ty
     }
 }
 
-/// NodeTypeParams for Class: single type_expr child = class name (identifier type).
+/// `NodeTypeParams` for Class: single `type_expr` child = class name (identifier type).
 fn parse_class_type_param(node: &SyntaxNode) -> Option<String> {
     let type_expr = node
         .child_nodes()
         .find(|n| n.kind_as::<Kind>() == Some(Kind::NodeTypeExpr))?;
     let res = parse_type_expr(&type_expr);
     match res {
-        TypeExprResult::Ok(Type::Class(Some(name))) | TypeExprResult::Ok(Type::Instance(name)) => {
-            Some(name)
-        }
+        TypeExprResult::Ok(Type::Class(Some(name)) | Type::Instance(name)) => Some(name),
         _ => None,
     }
 }
 
-/// NodeTypeParams with single type_expr (Array<T>, Set<T>, Interval<T>).
+/// `NodeTypeParams` with single `type_expr` (Array<T>, Set<T>, Interval<T>).
 fn parse_single_type_param(node: &SyntaxNode) -> Option<Type> {
     let type_expr = node
         .child_nodes()
@@ -258,7 +256,7 @@ fn parse_single_type_param(node: &SyntaxNode) -> Option<Type> {
     }
 }
 
-/// NodeTypeParams for Map: two type_exprs (K, V).
+/// `NodeTypeParams` for Map: two `type_exprs` (K, V).
 fn parse_map_type_params(node: &SyntaxNode) -> Option<(Type, Type)> {
     let type_exprs: Vec<SyntaxNode> = node
         .child_nodes()
@@ -279,7 +277,7 @@ fn parse_map_type_params(node: &SyntaxNode) -> Option<(Type, Type)> {
     }
 }
 
-/// NodeTypeParams for Function: either `=> R` (0 args) or `T1, T2, ... => R` or `(T1, T2) => R`.
+/// `NodeTypeParams` for Function: either `=> R` (0 args) or `T1, T2, ... => R` or `(T1, T2) => R`.
 fn parse_function_type_params(node: &SyntaxNode) -> Option<(Vec<Type>, Type)> {
     let type_exprs: Vec<SyntaxNode> = node
         .child_nodes()
@@ -325,7 +323,7 @@ pub fn find_type_expr_child(parent: &SyntaxNode) -> Option<SyntaxNode> {
 
 /// Parameter types and return type for a `NodeAnonFn` (lambda or anonymous function).
 /// Params without type annotation get `Type::any()`; return type is always `Type::any()` (no syntax for it).
-/// Collects params in source order by sorting by span start (find_all_nodes is depth-first and may not match source order).
+/// Collects params in source order by sorting by span start (`find_all_nodes` is depth-first and may not match source order).
 #[must_use]
 pub fn anon_fn_types(node: &SyntaxNode) -> (Vec<Type>, Type) {
     if node.kind_as::<Kind>() != Some(Kind::NodeAnonFn) {

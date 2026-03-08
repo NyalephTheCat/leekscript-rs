@@ -1,4 +1,4 @@
-//! Scope extents: map from byte offset to ScopeId for LSP (go-to-def, references, completion).
+//! Scope extents: map from byte offset to `ScopeId` for LSP (go-to-def, references, completion).
 //!
 //! Delegates to [`sipha_analysis`] with a LeekScript-specific predicate for scope-creating nodes.
 
@@ -8,9 +8,9 @@ use leekscript_core::syntax::Kind;
 
 use super::scope::ScopeId;
 
-/// Build list of (ScopeId, extent) where extent is (start_byte, end_byte).
-/// Root scope (ScopeId(0)) is always first with extent (0, source_len).
-/// Remaining entries are in walk order, matching scope_id_sequence.
+/// Build list of (`ScopeId`, extent) where extent is (`start_byte`, `end_byte`).
+/// Root scope (ScopeId(0)) is always first with extent (0, `source_len`).
+/// Remaining entries are in walk order, matching `scope_id_sequence`.
 #[must_use]
 pub fn build_scope_extents(
     root: &SyntaxNode,

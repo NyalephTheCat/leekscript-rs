@@ -1,4 +1,4 @@
-//! LeekScript parser core: syntax, types, grammar, parser, preprocess, doc comments.
+//! `LeekScript` parser core: syntax, types, grammar, parser, preprocess, doc comments.
 
 pub mod doc_comment;
 pub mod grammar;

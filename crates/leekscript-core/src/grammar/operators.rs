@@ -150,7 +150,7 @@ pub fn add_operator(g: &mut sipha::builder::GrammarBuilder) {
 }
 
 /// Arrow token for return types and function types: `->` or `=>`.
-/// Must be registered before single-char operators (e.g. op_minus, op_assign, op_gt)
+/// Must be registered before single-char operators (e.g. `op_minus`, `op_assign`, `op_gt`)
 /// so that `->` and `=>` are tokenized as one token, not as `-`+`>` or `=`+`>`.
 pub fn add_arrow(g: &mut sipha::builder::GrammarBuilder) {
     g.lexer_rule("arrow", |g| {

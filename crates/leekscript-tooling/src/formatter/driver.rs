@@ -17,9 +17,9 @@ use super::options::{BraceStyle, FormatterOptions, IndentStyle, SemicolonStyle};
 
 /// Compound expression node kinds that get parentheses when `parenthesize_expressions` is true.
 /// We wrap nodes that contain the *entire* expression in the AST:
-/// - NodeBinaryLevel: one precedence level (add, mul, compare, etc.) with [left, op, right, ...].
-/// - NodeUnaryExpr, NodeExpr, NodeAsCast, NodeArray, NodeMap, NodeInterval (full expr in one node).
-/// We do NOT wrap NodeBinaryExpr (only [op, right]), NodeMemberExpr, NodeCallExpr, NodeIndexExpr.
+/// - `NodeBinaryLevel`: one precedence level (add, mul, compare, etc.) with [left, op, right, ...].
+/// - `NodeUnaryExpr`, `NodeExpr`, `NodeAsCast`, `NodeArray`, `NodeMap`, `NodeInterval` (full expr in one node).
+/// We do NOT wrap `NodeBinaryExpr` (only [op, right]), `NodeMemberExpr`, `NodeCallExpr`, `NodeIndexExpr`.
 fn is_expression_node(kind: Kind) -> bool {
     matches!(
         kind,
@@ -250,9 +250,9 @@ struct FormatDriverWithExtras<'a> {
     out: String,
     /// Stack of "did we emit open paren for this node" for matching close parens.
     paren_stack: Vec<bool>,
-    /// Depth in the tree (incremented on enter_node, decremented on leave_node).
+    /// Depth in the tree (incremented on `enter_node`, decremented on `leave_node`).
     depth: usize,
-    /// When to emit ")" for postfix chains (a.b.c → (a.b).c): (parent_depth, children_left_to_leave).
+    /// When to emit ")" for postfix chains (a.b.c → (a.b).c): (`parent_depth`, `children_left_to_leave`).
     postfix_close_stack: Vec<(usize, usize)>,
 }
 
@@ -264,7 +264,7 @@ fn is_postfix_chain(node: &SyntaxNode) -> bool {
     let first = children[0].kind_as::<Kind>();
     let first_is_suffix = matches!(
         first,
-        Some(Kind::NodeMemberExpr) | Some(Kind::NodeCallExpr) | Some(Kind::NodeIndexExpr)
+        Some(Kind::NodeMemberExpr | Kind::NodeCallExpr | Kind::NodeIndexExpr)
     );
     if first_is_suffix {
         return false;
@@ -272,7 +272,7 @@ fn is_postfix_chain(node: &SyntaxNode) -> bool {
     children[1..].iter().all(|c| {
         matches!(
             c.kind_as::<Kind>(),
-            Some(Kind::NodeMemberExpr) | Some(Kind::NodeCallExpr) | Some(Kind::NodeIndexExpr)
+            Some(Kind::NodeMemberExpr | Kind::NodeCallExpr | Kind::NodeIndexExpr)
         )
     })
 }
@@ -286,7 +286,7 @@ impl Visitor for FormatDriverWithExtras<'_> {
                     let has_binary = node.child_nodes().any(|c| {
                         matches!(
                             c.kind_as::<Kind>(),
-                            Some(Kind::NodeBinaryExpr) | Some(Kind::NodeInterval)
+                            Some(Kind::NodeBinaryExpr | Kind::NodeInterval)
                         )
                     });
                     if has_binary {
@@ -343,7 +343,7 @@ impl Visitor for FormatDriverWithExtras<'_> {
         }
         // Only emit type comments for node kinds we actually record in the type checker (avoids duplicates from wrapper nodes that share a child's span).
         if self.options.annotate_types {
-            let kind_ok = node.kind_as::<Kind>().map_or(false, |k| {
+            let kind_ok = node.kind_as::<Kind>().is_some_and(|k| {
                 matches!(
                     k,
                     Kind::NodePrimaryExpr

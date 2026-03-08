@@ -2,8 +2,8 @@
 //!
 //! Minimal (expression grammar): primary only.
 //! Full (program grammar): precedence levels from primary up to assignment.
-//! Uses sipha's precedence helpers (expr::left_assoc_infix_level, right_assoc_infix_level)
-//! where applicable; levels that need a NodeBinaryLevel wrapper use a local helper.
+//! Uses sipha's precedence helpers (`expr::left_assoc_infix_level`, `right_assoc_infix_level`)
+//! where applicable; levels that need a `NodeBinaryLevel` wrapper use a local helper.
 
 use crate::syntax::Kind;
 use sipha::expr;
@@ -369,7 +369,7 @@ pub fn add_unary(g: &mut sipha::builder::GrammarBuilder) {
 
 // ─── Precedence (sipha helpers + interval) ─────────────────────────────────────
 
-/// Interval level: expr_add ( .. expr_interval )* with NodeInterval for each (.. rhs).
+/// Interval level: `expr_add` ( .. `expr_interval` )* with `NodeInterval` for each (.. rhs).
 fn left_assoc_interval_level(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("expr_interval", |g: &mut sipha::builder::GrammarBuilder| {
         g.node(Kind::NodeBinaryLevel, |g| {
@@ -384,7 +384,7 @@ fn left_assoc_interval_level(g: &mut sipha::builder::GrammarBuilder) {
     });
 }
 
-/// Power: unary ** expr_power (right-associative) | unary (sipha precedence climbing).
+/// Power: unary ** `expr_power` (right-associative) | unary (sipha precedence climbing).
 pub fn add_expr_power(g: &mut sipha::builder::GrammarBuilder) {
     expr::right_assoc_infix_level(
         g,
@@ -397,7 +397,7 @@ pub fn add_expr_power(g: &mut sipha::builder::GrammarBuilder) {
     );
 }
 
-/// Mul: expr_power ( * / \ % expr_power )* with NodeBinaryLevel wrapper and RHS field.
+/// Mul: `expr_power` ( * / \ % `expr_power` )* with `NodeBinaryLevel` wrapper and RHS field.
 pub fn add_expr_mul(g: &mut sipha::builder::GrammarBuilder) {
     expr::left_assoc_infix_level(
         g,
@@ -411,7 +411,7 @@ pub fn add_expr_mul(g: &mut sipha::builder::GrammarBuilder) {
     );
 }
 
-/// Add: expr_mul ( + - expr_mul )* with NodeBinaryLevel wrapper and RHS field.
+/// Add: `expr_mul` ( + - `expr_mul` )* with `NodeBinaryLevel` wrapper and RHS field.
 pub fn add_expr_add(g: &mut sipha::builder::GrammarBuilder) {
     expr::left_assoc_infix_level(
         g,
@@ -425,12 +425,12 @@ pub fn add_expr_add(g: &mut sipha::builder::GrammarBuilder) {
     );
 }
 
-/// Interval: expr_add ( .. expr_interval )* (range); uses NodeInterval for each (.. rhs).
+/// Interval: `expr_add` ( .. `expr_interval` )* (range); uses `NodeInterval` for each (.. rhs).
 pub fn add_expr_interval(g: &mut sipha::builder::GrammarBuilder) {
     left_assoc_interval_level(g);
 }
 
-/// Compare: expr_interval ( < <= > >= expr_interval )* (no wrapper).
+/// Compare: `expr_interval` ( < <= > >= `expr_interval` )* (no wrapper).
 pub fn add_expr_compare(g: &mut sipha::builder::GrammarBuilder) {
     expr::left_assoc_infix_level(
         g,
@@ -444,7 +444,7 @@ pub fn add_expr_compare(g: &mut sipha::builder::GrammarBuilder) {
     );
 }
 
-/// Equality: expr_compare ( === !== == != expr_compare )* with wrapper and RHS field.
+/// Equality: `expr_compare` ( === !== == != `expr_compare` )* with wrapper and RHS field.
 pub fn add_expr_equality(g: &mut sipha::builder::GrammarBuilder) {
     expr::left_assoc_infix_level(
         g,
@@ -458,7 +458,7 @@ pub fn add_expr_equality(g: &mut sipha::builder::GrammarBuilder) {
     );
 }
 
-/// In (membership): expr_equality ( in expr_equality )* (no wrapper).
+/// In (membership): `expr_equality` ( in `expr_equality` )* (no wrapper).
 pub fn add_expr_in(g: &mut sipha::builder::GrammarBuilder) {
     expr::left_assoc_infix_level(
         g,
@@ -472,7 +472,7 @@ pub fn add_expr_in(g: &mut sipha::builder::GrammarBuilder) {
     );
 }
 
-/// Instanceof: expr_in ( instanceof expr_equality )* with wrapper and RHS field.
+/// Instanceof: `expr_in` ( instanceof `expr_equality` )* with wrapper and RHS field.
 pub fn add_expr_instanceof(g: &mut sipha::builder::GrammarBuilder) {
     expr::left_assoc_infix_level(
         g,
@@ -486,7 +486,7 @@ pub fn add_expr_instanceof(g: &mut sipha::builder::GrammarBuilder) {
     );
 }
 
-/// And: expr_instanceof ( && | and expr_instanceof )* with wrapper and RHS field.
+/// And: `expr_instanceof` ( && | and `expr_instanceof` )* with wrapper and RHS field.
 pub fn add_expr_and(g: &mut sipha::builder::GrammarBuilder) {
     expr::left_assoc_infix_level(
         g,
@@ -500,7 +500,7 @@ pub fn add_expr_and(g: &mut sipha::builder::GrammarBuilder) {
     );
 }
 
-/// Or: expr_and ( || | or expr_and )* with wrapper and RHS field.
+/// Or: `expr_and` ( || | or `expr_and` )* with wrapper and RHS field.
 pub fn add_expr_or(g: &mut sipha::builder::GrammarBuilder) {
     expr::left_assoc_infix_level(
         g,
@@ -514,7 +514,7 @@ pub fn add_expr_or(g: &mut sipha::builder::GrammarBuilder) {
     );
 }
 
-/// Xor: expr_or ( xor expr_or )* with wrapper and RHS field.
+/// Xor: `expr_or` ( xor `expr_or` )* with wrapper and RHS field.
 pub fn add_expr_xor(g: &mut sipha::builder::GrammarBuilder) {
     expr::left_assoc_infix_level(
         g,

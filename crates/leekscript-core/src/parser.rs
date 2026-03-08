@@ -21,9 +21,9 @@ where
     F: FnOnce() -> sipha::builder::BuiltGraph,
 {
     storage.get_or_init(|| {
-        let built = build();
-        let graph = built.as_graph();
-        (built, graph)
+        let grammar = build();
+        let graph = grammar.as_graph();
+        (grammar, graph)
     })
 }
 

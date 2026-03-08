@@ -48,7 +48,7 @@ use leekscript_core::Type;
 /// Options for running analysis (single entry point for program or document).
 #[derive(Default)]
 pub struct AnalyzeOptions<'a> {
-    /// When set, scope is seeded from included files and (if present) signature_roots; then the main program is analyzed.
+    /// When set, scope is seeded from included files and (if present) `signature_roots`; then the main program is analyzed.
     pub include_tree: Option<&'a leekscript_core::IncludeTree>,
     /// When set, root scope is seeded with these signature roots (e.g. from `parse_signatures()`).
     pub signature_roots: Option<&'a [SyntaxNode]>,

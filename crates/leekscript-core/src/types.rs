@@ -274,12 +274,12 @@ impl Type {
                         || matches!(self, Type::Function { .. });
                 }
                 match (self, other) {
-                    (Type::Array(te), Type::Array(oe)) => te.assignable_from(oe),
+                    (Type::Array(te), Type::Array(oe))
+                    | (Type::Set(te), Type::Set(oe))
+                    | (Type::Interval(te), Type::Interval(oe)) => te.assignable_from(oe),
                     (Type::Map(tk, tv), Type::Map(ok, ov)) => {
                         tk.assignable_from(ok) && tv.assignable_from(ov)
                     }
-                    (Type::Set(te), Type::Set(oe)) => te.assignable_from(oe),
-                    (Type::Interval(te), Type::Interval(oe)) => te.assignable_from(oe),
                     (Type::Class(ta), Type::Class(oa)) => match (ta, oa) {
                         (None, _) => true,
                         (Some(_), None) => false,
@@ -300,8 +300,9 @@ impl Type {
         }
         match (from, to) {
             (Type::Error, _) | (_, Type::Error) => CastType::Incompatible,
-            (_, Type::Any) => CastType::Upcast,
-            (Type::Int, Type::Real) => CastType::Upcast,
+            (_, Type::Any)
+            | (Type::Int, Type::Real)
+            | (Type::Class(Some(_)), Type::Class(None)) => CastType::Upcast,
             (Type::Null, to)
                 if to.can_be_null()
                     || matches!(
@@ -322,16 +323,14 @@ impl Type {
             (from, Type::Compound(types)) if types.iter().any(|t| from.assignable_from(t)) => {
                 CastType::Upcast
             }
-            (Type::Any, _) => CastType::UnsafeDowncast,
-            (Type::Real, Type::Int) | (Type::Real, Type::Bool) | (Type::Int, Type::Bool) => {
+            (Type::Any, _)
+            | (Type::Class(None | Some(_)), Type::Class(Some(_)))
+            | (Type::Instance(_), Type::Instance(_)) => CastType::UnsafeDowncast,
+            (Type::Real, Type::Int | Type::Bool) | (Type::Int, Type::Bool) => {
                 CastType::UnsafeDowncast
             }
-            (Type::Class(Some(_)), Type::Class(None)) => CastType::Upcast,
-            (Type::Class(None), Type::Class(Some(_))) => CastType::UnsafeDowncast,
             (Type::Class(Some(a)), Type::Class(Some(b))) if a == b => CastType::Equals,
-            (Type::Class(Some(_)), Type::Class(Some(_))) => CastType::UnsafeDowncast,
             (Type::Instance(a), Type::Instance(b)) if a == b => CastType::Equals,
-            (Type::Instance(_), Type::Instance(_)) => CastType::UnsafeDowncast,
             _ => {
                 if to.assignable_from(from) {
                     CastType::Upcast

@@ -42,34 +42,31 @@ fn parse_format_table(t: &toml::map::Map<String, toml::Value>) -> Option<Formatt
     let indent_style = t
         .get("indent")
         .and_then(|v| v.as_str())
-        .map(parse_indent_style)
-        .unwrap_or(IndentStyle::Tabs);
+        .map_or(IndentStyle::Tabs, parse_indent_style);
 
     let brace_style = t
         .get("brace_style")
         .and_then(|v| v.as_str())
-        .map(parse_brace_style)
-        .unwrap_or(BraceStyle::SameLine);
+        .map_or(BraceStyle::SameLine, parse_brace_style);
 
     let semicolon_style = t
         .get("semicolon_style")
         .and_then(|v| v.as_str())
-        .map(parse_semicolon_style)
-        .unwrap_or(SemicolonStyle::Always);
+        .map_or(SemicolonStyle::Always, parse_semicolon_style);
 
     let canonical_format = t
         .get("canonical")
-        .and_then(|v| v.as_bool())
+        .and_then(toml::Value::as_bool)
         .unwrap_or(false);
 
     Some(FormatterOptions {
         preserve_comments: t
             .get("preserve_comments")
-            .and_then(|v| v.as_bool())
+            .and_then(toml::Value::as_bool)
             .unwrap_or(true),
         parenthesize_expressions: t
             .get("parenthesize_expressions")
-            .and_then(|v| v.as_bool())
+            .and_then(toml::Value::as_bool)
             .unwrap_or(false),
         annotate_types: false,
         signature_roots: None,

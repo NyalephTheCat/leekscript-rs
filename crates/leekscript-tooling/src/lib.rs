@@ -1,4 +1,4 @@
-//! LeekScript tooling: formatter, visitor, tree display, optional transform.
+//! `LeekScript` tooling: formatter, visitor, tree display, optional transform.
 
 pub mod formatter;
 pub mod tree_display;

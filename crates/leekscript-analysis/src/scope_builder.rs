@@ -98,14 +98,13 @@ impl Default for ScopeBuilder {
     }
 }
 
-/// True if `node` is at program top level (not inside Block, FunctionDecl, or ClassDecl).
+/// True if `node` is at program top level (not inside Block, `FunctionDecl`, or `ClassDecl`).
 fn is_top_level(node: &SyntaxNode, root: &SyntaxNode) -> bool {
     for anc in node.ancestors(root) {
-        match anc.kind_as::<Kind>() {
-            Some(Kind::NodeBlock) | Some(Kind::NodeFunctionDecl) | Some(Kind::NodeClassDecl) => {
-                return false;
-            }
-            _ => {}
+        if let Some(Kind::NodeBlock | Kind::NodeFunctionDecl | Kind::NodeClassDecl) =
+            anc.kind_as::<Kind>()
+        {
+            return false;
         }
     }
     true
@@ -177,7 +176,7 @@ pub fn seed_scope_from_program(store: &mut ScopeStore, root: &SyntaxNode) {
     seed_class_members_from_program(store, root);
 }
 
-/// Register class fields and methods from a program AST so that member access (obj.field, obj.method())
+/// Register class fields and methods from a program AST so that member access (obj.field, `obj.method()`)
 /// infers types. Called after root-level decls are seeded; only processes top-level classes.
 fn seed_class_members_from_program(store: &mut ScopeStore, root: &SyntaxNode) {
     let kind_class = Kind::NodeClassDecl.into_syntax_kind();
@@ -189,7 +188,7 @@ fn seed_class_members_from_program(store: &mut ScopeStore, root: &SyntaxNode) {
             let r = c.text_range();
             r.start <= node_range.start && node_range.end <= r.end
         });
-        let class_name = match anc.and_then(|a| class_decl_info(a)) {
+        let class_name = match anc.and_then(class_decl_info) {
             Some(info) => info.name,
             None => continue,
         };
@@ -210,7 +209,7 @@ fn seed_class_members_from_program(store: &mut ScopeStore, root: &SyntaxNode) {
             let r = c.text_range();
             r.start <= node_range.start && node_range.end <= r.end
         });
-        let class_name = match anc.and_then(|a| class_decl_info(a)) {
+        let class_name = match anc.and_then(class_decl_info) {
             Some(info) => info.name,
             None => continue,
         };
@@ -261,7 +260,7 @@ impl Visitor for ScopeBuilder {
                             let is_static = self
                                 .root
                                 .as_ref()
-                                .map_or(false, |root| class_method_is_static(node, root));
+                                .is_some_and(|root| class_method_is_static(node, root));
                             let vis = class_member_visibility(node, self.root.as_ref().unwrap());
                             if is_static {
                                 self.store.add_class_static_method(

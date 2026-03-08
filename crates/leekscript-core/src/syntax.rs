@@ -130,16 +130,16 @@ pub enum Kind {
     NodeSigParam,
     /// Doxygen-style doc block after a function/global in .sig (/// lines or /** */ block).
     NodeSigDocBlock,
-    /// Doc line token: `///` plus rest of line (for NodeSigDocBlock).
+    /// Doc line token: `///` plus rest of line (for `NodeSigDocBlock`).
     TokSigDocLine,
-    /// Block doc token: `/**` ... `*/` (for NodeSigDocBlock).
+    /// Block doc token: `/**` ... `*/` (for `NodeSigDocBlock`).
     TokSigDocBlock,
 }
 
 /// sipha uses this kind for a wrapper root when the grammar produces a single root node.
 pub const SYNTHETIC_ROOT: sipha::types::SyntaxKind = u16::MAX;
 
-/// LeekScript keywords (for completion and tooling). Sorted for display.
+/// `LeekScript` keywords (for completion and tooling). Sorted for display.
 pub const KEYWORDS: &[&str] = &[
     "abstract",
     "and",
@@ -186,7 +186,7 @@ pub const KEYWORDS: &[&str] = &[
     "xor",
 ];
 
-/// Returns true if `name` is a valid LeekScript identifier (non-empty, starts with letter or
+/// Returns true if `name` is a valid `LeekScript` identifier (non-empty, starts with letter or
 /// underscore, rest alphanumeric or underscore). Used e.g. for rename validation in LSP.
 #[must_use]
 pub fn is_valid_identifier(name: &str) -> bool {

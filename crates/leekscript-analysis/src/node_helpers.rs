@@ -109,6 +109,7 @@ pub fn member_expr_receiver_name(node: &SyntaxNode) -> Option<String> {
 /// Returns the declaration kind and name from a `NodeVarDecl`.
 /// For "var x", "global T x": name is the first identifier after the keyword.
 /// For typed form "Array<EffectOverTime> arr" or "integer? y": name is the *last* identifier before "=" (type names come first).
+#[must_use]
 pub fn var_decl_info(node: &SyntaxNode) -> Option<VarDeclInfo> {
     if node.kind_as::<Kind>() != Some(Kind::NodeVarDecl) {
         return None;
@@ -144,8 +145,8 @@ pub struct FunctionDeclInfo {
 }
 
 /// Number of argument expressions in a `NodeCallExpr`. Used for type inference so the call
-/// is inferred as the function's return type. The grammar uses lparen, optional(expr, zero_or_more(comma, expr)), rparen;
-/// the optional may be one node (with 0, 1, or more children) or optional + zero_or_more as siblings.
+/// is inferred as the function's return type. The grammar uses lparen, optional(expr, `zero_or_more(comma`, expr)), rparen;
+/// the optional may be one node (with 0, 1, or more children) or optional + `zero_or_more` as siblings.
 #[must_use]
 pub fn call_argument_count(node: &SyntaxNode) -> usize {
     if node.kind_as::<Kind>() != Some(Kind::NodeCallExpr) {
@@ -175,7 +176,10 @@ pub fn call_argument_node(node: &SyntaxNode, i: usize) -> Option<SyntaxNode> {
         content_nodes[0].child_nodes().collect()
     } else {
         let mut v = Vec::new();
-        if let Some(expr) = content_nodes.first().and_then(|n| n.first_child_node()) {
+        if let Some(expr) = content_nodes
+            .first()
+            .and_then(sipha::red::SyntaxNode::first_child_node)
+        {
             v.push(expr);
         }
         for n in &content_nodes[1..] {
@@ -198,6 +202,7 @@ pub fn param_has_default(node: &SyntaxNode) -> bool {
 
 /// Returns name and parameter counts from a `NodeFunctionDecl`.
 /// For default parameters, `min_arity` is the number of required params; `max_arity` is total.
+#[must_use]
 pub fn function_decl_info(node: &SyntaxNode) -> Option<FunctionDeclInfo> {
     if node.kind_as::<Kind>() != Some(Kind::NodeFunctionDecl) {
         return None;
@@ -230,6 +235,7 @@ pub struct ClassDeclInfo {
 }
 
 /// Returns class name and optional super class from a `NodeClassDecl`.
+#[must_use]
 pub fn class_decl_info(node: &SyntaxNode) -> Option<ClassDeclInfo> {
     if node.kind_as::<Kind>() != Some(Kind::NodeClassDecl) {
         return None;
@@ -312,7 +318,7 @@ pub fn primary_expr_new_constructor(node: &SyntaxNode) -> Option<(String, usize)
             SyntaxElement::Node(_) => true,
         })
         .collect();
-    let first = elements.get(0)?;
+    let first = elements.first()?;
     let first_tok = match first {
         SyntaxElement::Token(t) => t,
         _ => return None,
@@ -446,7 +452,7 @@ pub fn is_ternary_expr(node: &SyntaxNode) -> bool {
 /// Null-check ops: then branch is non-null when condition is true.
 const NULL_CHECK_OPS: &[&str] = &["!=", "!==", "==", "==="];
 
-/// Returns (var_name, then_is_non_null) if `node` is a null-check condition (e.g. `var != null`, `var === null`).
+/// Returns (`var_name`, `then_is_non_null`) if `node` is a null-check condition (e.g. `var != null`, `var === null`).
 /// Searches recursively for a binary with one identifier and one null. `root` is used to get parent/siblings.
 #[must_use]
 pub fn null_check_from_condition(
@@ -524,9 +530,7 @@ fn prev_sibling_node(node: &SyntaxNode, root: &SyntaxNode) -> Option<SyntaxNode>
 }
 
 fn is_null_literal(node: &SyntaxNode) -> bool {
-    node.first_token()
-        .map(|t| t.text() == "null")
-        .unwrap_or(false)
+    node.first_token().is_some_and(|t| t.text() == "null")
 }
 
 /// Index of `node` among `parent`'s children (including tokens). Returns `None` if not a direct child.
@@ -543,6 +547,7 @@ pub fn node_index_in_parent(node: &SyntaxNode, parent: &SyntaxNode) -> Option<us
 }
 
 /// Parameter name and span from a `NodeParam` (for scope building).
+#[must_use]
 pub fn param_name(node: &SyntaxNode) -> Option<(String, Span)> {
     if node.kind_as::<Kind>() != Some(Kind::NodeParam) {
         return None;
@@ -557,7 +562,7 @@ pub fn param_name(node: &SyntaxNode) -> Option<(String, Span)> {
 }
 
 /// Field name, optional declared type, and whether it's static from a `NodeClassField`.
-/// Returns (name, type, is_static) where type is None if the field has no type annotation.
+/// Returns (name, type, `is_static`) where type is None if the field has no type annotation.
 #[must_use]
 pub fn class_field_info(node: &SyntaxNode) -> Option<(String, Option<Type>, bool)> {
     use super::type_expr::{parse_type_expr, TypeExprResult};
@@ -566,7 +571,7 @@ pub fn class_field_info(node: &SyntaxNode) -> Option<(String, Option<Type>, bool
         return None;
     }
     let tokens: Vec<SyntaxToken> = node.non_trivia_tokens().collect();
-    let is_static = tokens.first().map_or(false, |t| t.text() == "static");
+    let is_static = tokens.first().is_some_and(|t| t.text() == "static");
     let name_token = tokens
         .iter()
         .take_while(|t| t.text() != "=" && t.text() != ";")

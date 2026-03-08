@@ -130,18 +130,18 @@ fn add_sig_lexer(g: &mut sipha::builder::GrammarBuilder) {
     });
 
     g.lexer_rule("sig_kw_function", |g| {
-        sig_kw(g, Kind::KwFunction, b"function")
+        sig_kw(g, Kind::KwFunction, b"function");
     });
     g.lexer_rule("sig_kw_class", |g| sig_kw(g, Kind::KwClass, b"class"));
     g.lexer_rule("sig_kw_extends", |g| sig_kw(g, Kind::KwExtends, b"extends"));
     g.lexer_rule("sig_kw_constructor", |g| {
-        sig_kw(g, Kind::KwConstructor, b"constructor")
+        sig_kw(g, Kind::KwConstructor, b"constructor");
     });
     g.lexer_rule("sig_kw_static", |g| sig_kw(g, Kind::KwStatic, b"static"));
     g.lexer_rule("sig_kw_public", |g| sig_kw(g, Kind::KwPublic, b"public"));
     g.lexer_rule("sig_kw_private", |g| sig_kw(g, Kind::KwPrivate, b"private"));
     g.lexer_rule("sig_kw_protected", |g| {
-        sig_kw(g, Kind::KwProtected, b"protected")
+        sig_kw(g, Kind::KwProtected, b"protected");
     });
     g.lexer_rule("sig_kw_final", |g| sig_kw(g, Kind::KwFinal, b"final"));
     g.lexer_rule("sig_kw_global", |g| sig_kw(g, Kind::KwGlobal, b"global"));
@@ -185,66 +185,66 @@ fn add_sig_lexer(g: &mut sipha::builder::GrammarBuilder) {
     g.lexer_rule("sig_lparen", |g| {
         g.token(Kind::TokParenL, |g| {
             g.byte(b'(');
-        })
+        });
     });
     g.lexer_rule("sig_rparen", |g| {
         g.token(Kind::TokParenR, |g| {
             g.byte(b')');
-        })
+        });
     });
     g.lexer_rule("sig_lbrace", |g| {
         g.token(Kind::TokBraceL, |g| {
             g.byte(b'{');
-        })
+        });
     });
     g.lexer_rule("sig_rbrace", |g| {
         g.token(Kind::TokBraceR, |g| {
             g.byte(b'}');
-        })
+        });
     });
     g.lexer_rule("sig_comma", |g| {
         g.token(Kind::TokComma, |g| {
             g.byte(b',');
-        })
+        });
     });
     g.lexer_rule("sig_colon", |g| {
         g.token(Kind::TokColon, |g| {
             g.byte(b':');
-        })
+        });
     });
     g.lexer_rule("sig_arrow", |g| {
         g.choices(vec![
             Box::new(|g| {
                 g.token(Kind::TokArrow, |g| {
                     g.literal(b"->");
-                })
+                });
             }),
             Box::new(|g| {
                 g.token(Kind::TokArrow, |g| {
                     g.literal(b"=>");
-                })
+                });
             }),
         ]);
     });
     g.lexer_rule("sig_lt", |g| {
         g.token(Kind::TokOp, |g| {
             g.byte(b'<');
-        })
+        });
     });
     g.lexer_rule("sig_gt", |g| {
         g.token(Kind::TokOp, |g| {
             g.byte(b'>');
-        })
+        });
     });
     g.lexer_rule("sig_question", |g| {
         g.token(Kind::TokOp, |g| {
             g.byte(b'?');
-        })
+        });
     });
     g.lexer_rule("sig_pipe", |g| {
         g.token(Kind::TokOp, |g| {
             g.byte(b'|');
-        })
+        });
     });
 }
 
@@ -504,7 +504,7 @@ fn add_sig_doc_block(g: &mut sipha::builder::GrammarBuilder) {
     });
 }
 
-/// Top-level item: `function_sig` [doc_block]? | `global_sig` [doc_block]? | `class_sig`
+/// Top-level item: `function_sig` [`doc_block`]? | `global_sig` [`doc_block`]? | `class_sig`
 fn add_sig_item(g: &mut sipha::builder::GrammarBuilder) {
     g.parser_rule("sig_item", |g| {
         g.choices(vec![
@@ -539,7 +539,7 @@ fn add_sig_file(g: &mut sipha::builder::GrammarBuilder) {
 }
 
 /// Build the signature file grammar.
-/// Start rule: `start` → sig_ws `sig_file` sig_ws eof.
+/// Start rule: `start` → `sig_ws` `sig_file` `sig_ws` eof.
 #[must_use]
 pub fn build_signature_grammar() -> sipha::builder::BuiltGraph {
     let mut g = sipha::builder::GrammarBuilder::new();

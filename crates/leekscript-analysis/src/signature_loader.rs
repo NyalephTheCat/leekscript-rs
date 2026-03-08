@@ -83,7 +83,7 @@ pub(crate) fn seed_scope_from_signatures(store: &mut ScopeStore, signature_roots
                     }
                     i += 1 + meta_skip;
                 } else if n.kind_as::<Kind>() == Some(Kind::NodeSigClass) {
-                    if let Some(class_name) = sig_class_name(&n) {
+                    if let Some(class_name) = sig_class_name(n) {
                         store.add_root_class(class_name.clone(), sipha::types::Span::new(0, 0));
                         for method_node in n.find_all_nodes(Kind::NodeSigMethod.into_syntax_kind())
                         {
@@ -143,7 +143,7 @@ pub(crate) fn seed_scope_from_signatures(store: &mut ScopeStore, signature_roots
     }
 }
 
-/// After a function/global node at children[i], optionally comes NodeSigDocBlock (Doxygen-style).
+/// After a function/global node at children[i], optionally comes `NodeSigDocBlock` (Doxygen-style).
 /// Returns (extracted meta, number of following nodes to skip).
 fn sig_meta_from_following(children: &[SyntaxNode], idx: usize) -> (SigMeta, usize) {
     let mut meta = SigMeta::default();
@@ -157,7 +157,7 @@ fn sig_meta_from_following(children: &[SyntaxNode], idx: usize) -> (SigMeta, usi
     }
 }
 
-/// Extract raw doc text from NodeSigDocBlock (/// lines or /** */ token) and parse as Doxygen.
+/// Extract raw doc text from `NodeSigDocBlock` (/// lines or /** */ token) and parse as Doxygen.
 fn sig_doc_block_to_comment(node: &SyntaxNode) -> Option<leekscript_core::doc_comment::DocComment> {
     let tokens: Vec<_> = node.descendant_tokens();
     let mut raw = String::new();
@@ -205,14 +205,14 @@ fn sig_class_name(node: &SyntaxNode) -> Option<String> {
         .cloned()
 }
 
-/// True if this NodeSigMethod has "static" in its tokens.
+/// True if this `NodeSigMethod` has "static" in its tokens.
 fn sig_method_is_static(node: &SyntaxNode) -> bool {
     node.descendant_tokens()
         .iter()
         .any(|t| t.text() == "static")
 }
 
-/// Return type from NodeSigMethod (last direct child NodeTypeExpr).
+/// Return type from `NodeSigMethod` (last direct child `NodeTypeExpr`).
 fn sig_method_return_type(node: &SyntaxNode) -> Option<Type> {
     super::type_expr::param_and_return_types(node, Kind::NodeSigParam).1
 }
@@ -229,19 +229,19 @@ fn sig_method_name(node: &SyntaxNode) -> Option<String> {
     tokens.into_iter().nth(lparen_idx.checked_sub(1)?)
 }
 
-/// Param types from NodeSigMethod (NodeSigParam children; each has a type_expr).
+/// Param types from `NodeSigMethod` (`NodeSigParam` children; each has a `type_expr`).
 fn sig_method_param_types(node: &SyntaxNode) -> Option<Vec<Type>> {
     super::type_expr::param_and_return_types(node, Kind::NodeSigParam).0
 }
 
-/// True if this NodeSigField has "static" in its tokens.
+/// True if this `NodeSigField` has "static" in its tokens.
 fn sig_field_is_static(node: &SyntaxNode) -> bool {
     node.descendant_tokens()
         .iter()
         .any(|t| t.text() == "static")
 }
 
-/// Field type from NodeSigField (single type_expr).
+/// Field type from `NodeSigField` (single `type_expr`).
 fn sig_field_type(node: &SyntaxNode) -> Option<Type> {
     let te = find_type_expr_child(node)?;
     match parse_type_expr(&te) {
@@ -250,7 +250,7 @@ fn sig_field_type(node: &SyntaxNode) -> Option<Type> {
     }
 }
 
-/// Field name: last ident in NodeSigField (order is [static?] [final?] type_expr ident).
+/// Field name: last ident in `NodeSigField` (order is [static?] [final?] `type_expr` ident).
 fn sig_field_name(node: &SyntaxNode) -> Option<String> {
     let idents: Vec<String> = node
         .descendant_tokens()
@@ -281,7 +281,7 @@ fn sig_function_info(node: &SyntaxNode) -> Option<(String, usize, usize)> {
     Some((name, min_arity, max_arity))
 }
 
-/// Returns (param_types, return_type) from a NodeSigFunction when types can be parsed.
+/// Returns (`param_types`, `return_type`) from a `NodeSigFunction` when types can be parsed.
 fn sig_function_types(node: &SyntaxNode) -> (Option<Vec<Type>>, Option<Type>) {
     super::type_expr::param_and_return_types(node, Kind::NodeSigParam)
 }

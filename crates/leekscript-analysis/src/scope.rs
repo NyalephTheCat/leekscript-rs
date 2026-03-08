@@ -84,20 +84,15 @@ pub fn complexity_display_string(code: u8) -> &'static str {
 }
 
 /// Visibility of a class member. Properties and methods are **public by default** when no modifier is given.
-#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash)]
+#[derive(Clone, Copy, Debug, PartialEq, Eq, Hash, Default)]
 pub enum MemberVisibility {
+    #[default]
     Public,
     Protected,
     Private,
 }
 
-impl Default for MemberVisibility {
-    fn default() -> Self {
-        Self::Public
-    }
-}
-
-/// Fields and methods of a class (for member access type inference: this.x, this.method(), Class.staticMember).
+/// Fields and methods of a class (for member access type inference: this.x, `this.method()`, Class.staticMember).
 #[derive(Clone, Debug, Default)]
 pub struct ClassMembers {
     /// Instance field name -> (declared type, visibility).
@@ -311,7 +306,7 @@ impl Scope {
     }
 
     /// Get the type of a function when used as a value (e.g. `foo` without calling).
-    /// For a single overload with optional params (min_arity < max_arity), returns a union of
+    /// For a single overload with optional params (`min_arity` < `max_arity`), returns a union of
     /// function types per arity, e.g. getMP(entity?) -> integer gives
     /// `Function< => integer> | Function<integer => integer>`.
     #[must_use]
@@ -374,7 +369,7 @@ impl Scope {
 #[derive(Debug)]
 pub struct ScopeStore {
     scopes: Vec<Scope>,
-    /// Class name -> its fields and methods (for this.x / this.method() type inference).
+    /// Class name -> its fields and methods (for this.x / `this.method()` type inference).
     class_members: HashMap<String, ClassMembers>,
     /// Root function name -> doc + complexity (from .sig).
     root_function_meta: HashMap<String, SigMeta>,
@@ -501,7 +496,7 @@ impl ScopeStore {
         }
     }
 
-    /// Register a class field for member type lookup (this.field_name). Visibility defaults to Public.
+    /// Register a class field for member type lookup (`this.field_name`). Visibility defaults to Public.
     pub fn add_class_field(
         &mut self,
         class_name: &str,
@@ -516,7 +511,7 @@ impl ScopeStore {
             .insert(field_name, (ty, visibility));
     }
 
-    /// Register a class method for member type lookup (this.method_name returns function type). Visibility defaults to Public.
+    /// Register a class method for member type lookup (`this.method_name` returns function type). Visibility defaults to Public.
     pub fn add_class_method(
         &mut self,
         class_name: &str,
@@ -620,7 +615,7 @@ impl ScopeStore {
     #[must_use]
     pub fn root_has_class(&self, name: &str) -> bool {
         self.get(ScopeId(0))
-            .map_or(false, |scope| scope.has_class(name))
+            .is_some_and(|scope| scope.has_class(name))
     }
 
     /// Resolve a name: look in current scope and parents; also check main's functions and classes.

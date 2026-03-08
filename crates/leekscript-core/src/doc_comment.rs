@@ -85,8 +85,7 @@ fn strip_comment_markers(raw: &str, is_block: bool) -> String {
             };
             let content = content
                 .strip_prefix('*')
-                .map(|s| s.trim_start())
-                .unwrap_or(content)
+                .map_or(content, str::trim_start)
                 .trim();
             if !content.is_empty() || !out.is_empty() {
                 if !out.is_empty() {
@@ -110,8 +109,9 @@ fn strip_comment_markers(raw: &str, is_block: bool) -> String {
     out
 }
 
-/// Parse a single raw comment string (e.g. `/// line` or `/** ... */`) into a DocComment.
+/// Parse a single raw comment string (e.g. `/// line` or `/** ... */`) into a `DocComment`.
 /// Used by .sig loader for Doxygen-style blocks. `is_block` is true for `/**` … `*/`.
+#[must_use]
 pub fn parse_comment_content(content: &str, is_block: bool) -> DocComment {
     let normalized = strip_comment_markers(content, is_block);
     parse_normalized_content(&normalized)
@@ -123,7 +123,7 @@ fn tag_after<'a>(s: &'a str, prefix: &str) -> Option<&'a str> {
         .or_else(|| s.strip_prefix(&prefix.replace('@', "\\")))
 }
 
-/// Parse normalized (marker-stripped) content into DocComment.
+/// Parse normalized (marker-stripped) content into `DocComment`.
 fn parse_normalized_content(s: &str) -> DocComment {
     let mut doc = DocComment::default();
     let mut description_lines: Vec<&str> = Vec::new();
@@ -151,7 +151,7 @@ fn parse_normalized_content(s: &str) -> DocComment {
             Section::Code { lines } => {
                 let content = lines.join("\n").trim().to_string();
                 if !content.is_empty() {
-                    doc.sections.push(("".to_string(), content));
+                    doc.sections.push((String::new(), content));
                 }
             }
         }
@@ -167,7 +167,7 @@ fn parse_normalized_content(s: &str) -> DocComment {
                 in_description = false;
             }
             if let Section::Details = &mut section {
-                doc.details.get_or_insert_with(String::new).push_str("\n");
+                doc.details.get_or_insert_with(String::new).push('\n');
             }
             if let Section::Par {
                 lines: ref mut l, ..
@@ -188,17 +188,15 @@ fn parse_normalized_content(s: &str) -> DocComment {
             ("details", after.trim())
         } else if let Some(after) = tag_after(line, "@param") {
             ("param", after.trim())
-        } else if let Some(after) = tag_after(line, "@return") {
-            ("return", after.trim())
-        } else if let Some(after) = tag_after(line, "@returns") {
+        } else if let Some(after) =
+            tag_after(line, "@return").or_else(|| tag_after(line, "@returns"))
+        {
             ("return", after.trim())
         } else if let Some(after) = tag_after(line, "@retval") {
             ("retval", after.trim())
         } else if let Some(after) = tag_after(line, "@deprecated") {
             ("deprecated", after.trim())
-        } else if let Some(after) = tag_after(line, "@see") {
-            ("see", after.trim())
-        } else if let Some(after) = tag_after(line, "@sa") {
+        } else if let Some(after) = tag_after(line, "@see").or_else(|| tag_after(line, "@sa")) {
             ("see", after.trim())
         } else if let Some(after) = tag_after(line, "@since") {
             ("since", after.trim())
@@ -210,9 +208,9 @@ fn parse_normalized_content(s: &str) -> DocComment {
             ("author", after.trim())
         } else if let Some(after) = tag_after(line, "@version") {
             ("version", after.trim())
-        } else if let Some(after) = tag_after(line, "@exception") {
-            ("exception", after.trim())
-        } else if let Some(after) = tag_after(line, "@throws") {
+        } else if let Some(after) =
+            tag_after(line, "@exception").or_else(|| tag_after(line, "@throws"))
+        {
             ("exception", after.trim())
         } else if let Some(after) = tag_after(line, "@pre") {
             ("pre", after.trim())
@@ -254,8 +252,9 @@ fn parse_normalized_content(s: &str) -> DocComment {
                     }
                     d.push_str(line);
                 }
-                Section::Par { lines: l, .. } => l.push(line.to_string()),
-                Section::Code { lines: l } => l.push(line.to_string()),
+                Section::Par { lines: l, .. } | Section::Code { lines: l } => {
+                    l.push(line.to_string());
+                }
             }
             i += 1;
             continue;
@@ -266,11 +265,11 @@ fn parse_normalized_content(s: &str) -> DocComment {
         match tag {
             "details" => {
                 flush_section(&mut section, &mut doc);
-                if !after.is_empty() {
-                    doc.details = Some(after.to_string());
-                } else {
+                if after.is_empty() {
                     doc.details = Some(String::new());
                     section = Section::Details;
+                } else {
+                    doc.details = Some(after.to_string());
                 }
             }
             "par" => {
@@ -365,6 +364,7 @@ fn parse_normalized_content(s: &str) -> DocComment {
 /// Parse one or more raw comment strings (e.g. from multiple preceding trivia tokens).
 /// If the combined text contains a block comment (`/** ... */`), only that block is used
 /// so that a preceding line comment (e.g. `// Comment`) does not corrupt the doc block.
+#[must_use]
 pub fn parse_doc_comment(parts: &[String]) -> Option<DocComment> {
     if parts.is_empty() {
         return None;
@@ -436,7 +436,7 @@ fn preceding_comment_tokens(node: &SyntaxNode, root: &SyntaxNode) -> Option<Vec<
     let leading = node.leading_trivia();
     let comments: Vec<SyntaxToken> = leading
         .into_iter()
-        .filter(|t| Kind::from_syntax_kind(t.kind()).map_or(false, is_comment_trivia))
+        .filter(|t| Kind::from_syntax_kind(t.kind()).is_some_and(is_comment_trivia))
         .collect();
     if !comments.is_empty() {
         return Some(comments);
@@ -446,9 +446,8 @@ fn preceding_comment_tokens(node: &SyntaxNode, root: &SyntaxNode) -> Option<Vec<
         let parent = current.ancestors(root).into_iter().next()?;
         let children: Vec<SyntaxElement> = parent.children().collect();
         let pos = children.iter().position(|e| {
-            e.as_node().map_or(false, |n| {
-                n.offset() == current.offset() && n.kind() == current.kind()
-            })
+            e.as_node()
+                .is_some_and(|n| n.offset() == current.offset() && n.kind() == current.kind())
         })?;
         let mut comments = Vec::new();
         for i in (0..pos).rev() {
@@ -478,7 +477,8 @@ fn preceding_comment_tokens(node: &SyntaxNode, root: &SyntaxNode) -> Option<Vec<
     }
 }
 
-/// Build a map from declaration (start_byte, end_byte) to parsed documentation.
+/// Build a map from declaration (`start_byte`, `end_byte`) to parsed documentation.
+#[must_use]
 pub fn build_doc_map(root: &SyntaxNode) -> HashMap<(u32, u32), DocComment> {
     let mut map = HashMap::new();
     for kind in DOC_DECL_KINDS {

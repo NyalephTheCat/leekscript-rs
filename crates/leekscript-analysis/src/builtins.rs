@@ -6,5 +6,5 @@
 //! CLI options). Use the signature files under `examples/signatures/` or generate them from the
 //! [LeekScript API](https://leekscript.com); see `examples/signatures/README.md`.
 
-/// Built-in class/type names in LeekScript (language primitives only).
+/// Built-in class/type names in `LeekScript` (language primitives only).
 pub const BUILTIN_CLASS_NAMES: &[&str] = &["Class", "Object", "Array", "Map", "Set", "Interval"];

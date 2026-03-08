@@ -2,7 +2,7 @@
 //!
 //! Aligned with leekscript-java's `leekscript.common.Error` where applicable.
 //!
-//! ## Mapping to LeekScript Java compiler (Error enum)
+//! ## Mapping to `LeekScript` Java compiler (Error enum)
 //!
 //! | AnalysisError variant              | Java constant                     | Code |
 //! |------------------------------------|-----------------------------------|------|

@@ -34,17 +34,17 @@ pub enum RootSymbolKind {
 
 fn is_top_level(node: &SyntaxNode, root: &SyntaxNode) -> bool {
     for anc in node.ancestors(root) {
-        match anc.kind_as::<Kind>() {
-            Some(Kind::NodeBlock) | Some(Kind::NodeFunctionDecl) | Some(Kind::NodeClassDecl) => {
-                return false;
-            }
-            _ => {}
+        if let Some(Kind::NodeBlock | Kind::NodeFunctionDecl | Kind::NodeClassDecl) =
+            anc.kind_as::<Kind>()
+        {
+            return false;
         }
     }
     true
 }
 
 /// Build (name, kind) -> (path, start, end) for root-level symbols (includes first, then main).
+#[must_use]
 pub fn build_definition_map(
     tree: &IncludeTree,
     main_path: &Path,
@@ -80,7 +80,7 @@ pub fn build_definition_map(
     })
 }
 
-/// Find the declaration node span (for doc_map lookup) that contains the given name span.
+/// Find the declaration node span (for `doc_map` lookup) that contains the given name span.
 #[must_use]
 pub fn decl_span_for_name_span(
     root: &SyntaxNode,
@@ -120,7 +120,8 @@ pub fn decl_span_for_name_span(
     None
 }
 
-/// Build map class_name -> superclass_name from the AST (for visibility: subclass can see protected).
+/// Build map `class_name` -> `superclass_name` from the AST (for visibility: subclass can see protected).
+#[must_use]
 pub fn build_class_super(root: Option<&SyntaxNode>) -> HashMap<String, String> {
     let mut map = HashMap::new();
     let root = match root {
@@ -175,13 +176,13 @@ pub struct DocumentAnalysis {
     /// Map from expression span (start, end) to inferred type.
     pub type_map: HashMap<(u32, u32), leekscript_core::Type>,
     pub scope_store: ScopeStore,
-    /// Scope extent (ScopeId, (start_byte, end_byte)) for scope_at_offset.
+    /// Scope extent (`ScopeId`, (`start_byte`, `end_byte`)) for `scope_at_offset`.
     pub scope_extents: Vec<(ScopeId, (u32, u32))>,
-    /// (name, kind) -> (path, start_byte, end_byte) for root-level symbols.
+    /// (name, kind) -> (path, `start_byte`, `end_byte`) for root-level symbols.
     pub definition_map: HashMap<(String, RootSymbolKind), (PathBuf, u32, u32)>,
-    /// Map from declaration (start_byte, end_byte) to parsed Doxygen-style documentation.
+    /// Map from declaration (`start_byte`, `end_byte`) to parsed Doxygen-style documentation.
     pub doc_map: HashMap<(u32, u32), DocComment>,
-    /// When Some (with include_tree), doc_map per included file path.
+    /// When Some (with `include_tree`), `doc_map` per included file path.
     pub include_doc_maps: Option<HashMap<PathBuf, HashMap<(u32, u32), DocComment>>>,
     /// Class name -> superclass name (for visibility: subclass can see protected).
     pub class_super: HashMap<String, String>,
@@ -373,7 +374,7 @@ impl DocumentAnalysis {
     }
 
     /// Build minimal document state with only source and line index (no parse/analysis).
-    /// Used by the LSP to update the document buffer immediately on did_change so that
+    /// Used by the LSP to update the document buffer immediately on `did_change` so that
     /// subsequent changes are applied to the correct base; analysis overwrites this when it completes.
     #[must_use]
     pub fn minimal(source: String) -> Self {
