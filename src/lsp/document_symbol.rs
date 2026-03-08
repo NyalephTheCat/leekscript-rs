@@ -3,6 +3,8 @@
 //! Builds a hierarchy of symbols for the current document: classes (with methods), top-level
 //! functions, and globals.
 
+#![allow(deprecated)] // DocumentSymbol.deprecated field is deprecated in lsp_types; use tags instead
+
 use sipha::line_index::LineIndex;
 use sipha::red::SyntaxNode;
 use sipha::types::IntoSyntaxKind;

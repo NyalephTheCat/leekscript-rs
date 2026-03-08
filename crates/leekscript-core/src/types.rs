@@ -323,14 +323,14 @@ impl Type {
             (from, Type::Compound(types)) if types.iter().any(|t| from.assignable_from(t)) => {
                 CastType::Upcast
             }
+            (Type::Class(Some(a)), Type::Class(Some(b))) if a == b => CastType::Equals,
+            (Type::Instance(a), Type::Instance(b)) if a == b => CastType::Equals,
             (Type::Any, _)
             | (Type::Class(None | Some(_)), Type::Class(Some(_)))
             | (Type::Instance(_), Type::Instance(_)) => CastType::UnsafeDowncast,
             (Type::Real, Type::Int | Type::Bool) | (Type::Int, Type::Bool) => {
                 CastType::UnsafeDowncast
             }
-            (Type::Class(Some(a)), Type::Class(Some(b))) if a == b => CastType::Equals,
-            (Type::Instance(a), Type::Instance(b)) if a == b => CastType::Equals,
             _ => {
                 if to.assignable_from(from) {
                     CastType::Upcast

@@ -3,6 +3,8 @@
 //! Builds a flat list of root-level symbols (classes, functions, globals) from open documents
 //! for "Go to symbol in workspace" (e.g. Ctrl+T).
 
+#![allow(deprecated)] // SymbolInformation.deprecated field is deprecated in lsp_types; use tags instead
+
 use std::path::Path;
 
 use sipha::line_index::LineIndex;
