@@ -1,14 +1,14 @@
 [package]
 name = "leekscript-document"
-version = "0.1.0"
+version = "0.1.1-alpha.2"
 edition = "2021"
 description = "LeekScript document-level API: DocumentAnalysis, definition map, doc maps"
 license = "MIT OR Apache-2.0"
 repository = "https://github.com/leek-wars/leekscript-rs"
 
 [dependencies]
-leekscript-analysis = { path = "../leekscript-analysis", version = "0.1.0" }
-leekscript-core = { path = "../leekscript-core", version = "0.1.0" }
+leekscript-analysis = { path = "../leekscript-analysis", version = "0.1.1-alpha.2" }
+leekscript-core = { path = "../leekscript-core", version = "0.1.1-alpha.2" }
 sipha = { version = "2.0.0", features = ["miette", "emit"] }
 sipha-analysis = "2.0.0"
 

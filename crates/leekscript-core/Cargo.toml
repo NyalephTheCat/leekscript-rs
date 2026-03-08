@@ -1,6 +1,6 @@
 [package]
 name = "leekscript-core"
-version = "0.1.0"
+version = "0.1.1-alpha.2"
 edition = "2021"
 description = "LeekScript parser core: syntax, grammar, parser, preprocess, doc comments"
 license = "MIT OR Apache-2.0"

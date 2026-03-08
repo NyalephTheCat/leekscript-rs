@@ -7,6 +7,10 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ## [Unreleased]
 
+### Changed
+
+- Bump all workspace crates to `0.1.1-alpha.2` (leekscript-rs, leekscript-core, leekscript-analysis, leekscript-document, leekscript-tooling).
+
 ## [0.1.1-alpha.1] - 2025-03-08
 
 ### Added
