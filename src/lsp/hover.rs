@@ -73,7 +73,7 @@ fn linkify_symbols_in_text(s: &str, analysis: &DocumentAnalysis) -> String {
             }
         }
     }
-    names.sort_by(|a, b| b.len().cmp(&a.len())); // longest first so "getCellX" before "getCell"
+    names.sort_by_key(|b| std::cmp::Reverse(b.len())); // longest first so "getCellX" before "getCell"
     let mut out = s.to_string();
     for name in names {
         if name.is_empty() {
@@ -91,11 +91,11 @@ fn linkify_symbols_in_text(s: &str, analysis: &DocumentAnalysis) -> String {
                 || !out[start - 1..]
                     .chars()
                     .next()
-                    .map_or(true, |c| c.is_ascii_alphanumeric() || c == '_');
+                    .is_none_or(|c| c.is_ascii_alphanumeric() || c == '_');
             let next_ch = out[end..].chars().next();
             let followed_by_parens = out.get(end..end + 2) == Some("()");
             let next_ok = next_ch.is_none()
-                || (!next_ch.map_or(true, |c| c.is_ascii_alphanumeric() || c == '_')
+                || (!next_ch.is_none_or(|c| c.is_ascii_alphanumeric() || c == '_')
                     && next_ch != Some('.')
                     && !followed_by_parens);
             if prev_ok && next_ok {
@@ -357,6 +357,7 @@ fn lsp_range(
     }
 }
 
+#[allow(clippy::too_many_arguments)]
 fn hover_contents_for_symbol(
     analysis: &DocumentAnalysis,
     _root: &SyntaxNode,

@@ -145,7 +145,7 @@ pub fn read_and_parse(input: Option<&Path>) -> ParseOutcome {
         Ok(s) => s,
         Err(e) => return ParseOutcome::IoError(e),
     };
-    let path_ref = input.map(|p| p);
+    let path_ref = input;
     let tree = match build_include_tree(&source, path_ref) {
         Ok(t) => t,
         Err(e) => return ParseOutcome::IncludeError(e),

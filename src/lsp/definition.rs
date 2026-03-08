@@ -40,8 +40,7 @@ fn definition_for_include_path(analysis: &DocumentAnalysis, byte_offset: u32) ->
     let ranges = collect_include_path_ranges(analysis.root.as_ref()?, source);
     let base_dir = analysis
         .main_path
-        .as_ref()
-        .map(std::path::PathBuf::as_path)
+        .as_deref()
         .and_then(Path::parent)
         .unwrap_or_else(|| Path::new("."));
     for (start, end, path_str) in ranges {

@@ -193,6 +193,7 @@ fn ident_choice(g: &mut sipha::builder::GrammarBuilder) {
     });
 }
 
+#[allow(clippy::type_complexity)]
 fn keyword_choices(
     keywords: &[(Kind, &[u8])],
 ) -> Vec<Box<dyn FnOnce(&mut sipha::builder::GrammarBuilder)>> {

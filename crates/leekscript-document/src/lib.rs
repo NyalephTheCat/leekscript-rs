@@ -183,6 +183,7 @@ pub struct DocumentAnalysis {
     /// Map from declaration (`start_byte`, `end_byte`) to parsed Doxygen-style documentation.
     pub doc_map: HashMap<(u32, u32), DocComment>,
     /// When Some (with `include_tree`), `doc_map` per included file path.
+    #[allow(clippy::type_complexity)]
     pub include_doc_maps: Option<HashMap<PathBuf, HashMap<(u32, u32), DocComment>>>,
     /// Class name -> superclass name (for visibility: subclass can see protected).
     pub class_super: HashMap<String, String>,
@@ -213,6 +214,7 @@ impl DocumentAnalysis {
         let mut scope_extents = vec![];
         let mut definition_map = HashMap::new();
         let mut doc_map = HashMap::new();
+        #[allow(clippy::type_complexity)]
         let mut include_doc_maps: Option<HashMap<PathBuf, HashMap<(u32, u32), DocComment>>> = None;
         let mut include_tree: Option<IncludeTree> = None;
         let mut main_path_buf: Option<PathBuf> = main_path.map(Path::to_path_buf);
@@ -280,8 +282,10 @@ impl DocumentAnalysis {
             }
         }
 
-        if doc_map.is_empty() && root.is_some() && include_tree.is_none() {
-            doc_map = build_doc_map(root.as_ref().unwrap());
+        if doc_map.is_empty() && include_tree.is_none() {
+            if let Some(r) = root.as_ref() {
+                doc_map = build_doc_map(r);
+            }
         }
 
         let class_super = build_class_super(root.as_ref());
@@ -463,6 +467,7 @@ impl DocumentAnalysis {
 /// Max parse errors to collect in recovery mode before stopping.
 const PARSE_RECOVERY_MAX_ERRORS: usize = 64;
 
+#[allow(clippy::too_many_arguments)]
 fn single_file_analysis(
     source: &str,
     signature_roots: &[SyntaxNode],

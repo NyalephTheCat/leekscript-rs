@@ -4,8 +4,6 @@
 //! sipha's [`Transformer`], [`transform`], and [`TransformResult`], and provides
 //! LeekScript-specific transformers such as [`ExpandAssignAdd`].
 
-#![cfg(feature = "transform")]
-
 use sipha::green::GreenNode;
 use sipha::green_builder::GreenBuilder;
 use sipha::red::SyntaxNode;

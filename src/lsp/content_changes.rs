@@ -105,7 +105,7 @@ pub fn apply_content_changes(
                 range.end.character,
             )?;
             Some(TextEdit {
-                start: start as u32,
+                start,
                 end: end as u32,
                 new_text: change.text.as_bytes().to_vec(),
             })

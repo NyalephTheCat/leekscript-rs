@@ -94,14 +94,13 @@ impl<'a> TypeChecker<'a> {
 
     /// If `node` is inside a function (anonymous, lambda, or named), returns that function node (`NodeAnonFn` or `NodeFunctionDecl`).
     fn enclosing_function(&self, node: &SyntaxNode) -> Option<SyntaxNode> {
-        for anc in node.ancestors(self.root) {
-            if anc.kind_as::<Kind>() == Some(Kind::NodeAnonFn)
-                || anc.kind_as::<Kind>() == Some(Kind::NodeFunctionDecl)
-            {
-                return Some(anc);
-            }
-        }
-        None
+        node.ancestors(self.root)
+            .iter()
+            .find(|anc| {
+                anc.kind_as::<Kind>() == Some(Kind::NodeAnonFn)
+                    || anc.kind_as::<Kind>() == Some(Kind::NodeFunctionDecl)
+            })
+            .cloned()
     }
 
     /// Inferred return type for a named function/method (from return statements). Used when declared return type is any.

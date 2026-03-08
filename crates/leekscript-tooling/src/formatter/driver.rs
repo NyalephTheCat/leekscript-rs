@@ -19,6 +19,7 @@ use super::options::{BraceStyle, FormatterOptions, IndentStyle, SemicolonStyle};
 /// We wrap nodes that contain the *entire* expression in the AST:
 /// - `NodeBinaryLevel`: one precedence level (add, mul, compare, etc.) with [left, op, right, ...].
 /// - `NodeUnaryExpr`, `NodeExpr`, `NodeAsCast`, `NodeArray`, `NodeMap`, `NodeInterval` (full expr in one node).
+///
 /// We do NOT wrap `NodeBinaryExpr` (only [op, right]), `NodeMemberExpr`, `NodeCallExpr`, `NodeIndexExpr`.
 fn is_expression_node(kind: Kind) -> bool {
     matches!(
@@ -121,7 +122,7 @@ impl CanonicalFormatDriver<'_> {
                 }
             }
             IndentStyle::Spaces(n) => {
-                let spaces = n.max(1).min(8) as usize;
+                let spaces = n.clamp(1, 8) as usize;
                 for _ in 0..self.indent_depth {
                     for _ in 0..spaces {
                         self.out.push(' ');

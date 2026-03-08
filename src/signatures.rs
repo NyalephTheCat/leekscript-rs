@@ -78,7 +78,7 @@ pub fn build_sig_definition_locations(
                     .map(|t| t.text().to_string());
                 if let Some(name) = name {
                     let start = child.text_range().start;
-                    let (line, _) = line_index.line_col(start as u32);
+                    let (line, _) = line_index.line_col(start);
                     out.insert(name, (path.clone(), line));
                 }
             }

@@ -61,7 +61,7 @@ pub fn compute_inlay_hints(
     let source = analysis.source.as_str();
     let line_index = &analysis.line_index;
 
-    let in_range = |byte_pos: u32| range.map_or(true, |(lo, hi)| byte_pos >= lo && byte_pos <= hi);
+    let in_range = |byte_pos: u32| range.is_none_or(|(lo, hi)| byte_pos >= lo && byte_pos <= hi);
 
     if let Some(ref root) = analysis.root {
         // Variable/global declarations: show inferred type only when it is not `any`.
@@ -572,6 +572,7 @@ where
 /// - When RHS is NodeBinaryLevel (nested level): wrap the RHS only — e.g. `a + (b * c)`.
 /// - When RHS is NodeBinaryExpr (op + right only): wrap the whole expression so the type
 ///   is shown on the closing paren — e.g. `(cell == null): boolean`.
+///
 /// Returns hints and the set of end offsets where the type was shown on the paren (so expression_type_hints skips them).
 fn parenthesis_hints<F>(
     analysis: &DocumentAnalysis,

@@ -145,7 +145,7 @@ pub fn find_references(
         }
         ResolvedSymbol::Variable(_) => None,
     };
-    if let (Some(ref tree), Some((ref def_path, def_start, def_end))) =
+    if let (Some(tree), Some((ref def_path, def_start, def_end))) =
         (analysis.include_tree.as_ref(), def_info)
     {
         let kind = match &target_symbol {
@@ -277,6 +277,7 @@ fn declaration_name_spans(root: &SyntaxNode, name: &str) -> HashSet<(u32, u32)> 
 }
 
 /// Find reference locations in an included file for a root-level symbol.
+#[allow(clippy::too_many_arguments)]
 fn references_in_included_file(
     path: &Path,
     root: &SyntaxNode,
