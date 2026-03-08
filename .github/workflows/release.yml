@@ -32,5 +32,10 @@ jobs:
       - name: Run tests
         run: cargo test -p leekscript-rs --all-features
 
-      - name: Publish leekscript-rs
-        run: cargo publish -p leekscript-rs
+      - name: Publish crates (dependency order)
+        run: |
+          cargo publish -p leekscript-core
+          cargo publish -p leekscript-analysis
+          cargo publish -p leekscript-document
+          cargo publish -p leekscript-tooling
+          cargo publish -p leekscript-rs

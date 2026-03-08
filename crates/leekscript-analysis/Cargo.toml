@@ -7,7 +7,7 @@ license = "MIT OR Apache-2.0"
 repository = "https://github.com/leek-wars/leekscript-rs"
 
 [dependencies]
-leekscript-core = { path = "../leekscript-core" }
+leekscript-core = { path = "../leekscript-core", version = "0.1.0" }
 sipha = { version = "2.0.0", features = ["miette", "emit"] }
 sipha-analysis = "2.0.0"
 
@@ -15,4 +15,4 @@ sipha-analysis = "2.0.0"
 unsafe_code = "forbid"
 
 [dev-dependencies]
-leekscript-document = { path = "../leekscript-document" }
+leekscript-document = { path = "../leekscript-document", version = "0.1.0" }
