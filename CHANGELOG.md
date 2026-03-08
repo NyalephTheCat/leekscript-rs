@@ -42,6 +42,7 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 - **Release**
   - `Cargo.toml`: description, license, repository, keywords, categories; feature docs for `lsp`, `transform`, `utf16`.
   - `CHANGELOG.md` (this file).
+  - Version bump to 0.1.1-alpha.0.
 
 ### Changed
 
