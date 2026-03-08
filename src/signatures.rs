@@ -112,6 +112,40 @@ pub fn default_signature_roots_with_locations() -> (Vec<SyntaxNode>, HashMap<Str
     (Vec::new(), HashMap::new())
 }
 
+/// Load signature roots and locations from a list of paths (each path may be a single `.sig` file or a directory of `.sig` files).
+/// Used by the LSP when the client sends `signatureFiles` in initialization options.
+#[must_use]
+pub fn load_signatures_from_paths_with_locations(
+    paths: &[PathBuf],
+) -> (Vec<SyntaxNode>, HashMap<String, (PathBuf, u32)>) {
+    let mut roots = Vec::new();
+    let mut locations = HashMap::new();
+    for path in paths {
+        if path.is_file() {
+            if path.extension().is_some_and(|e| e == "sig") {
+                if let Ok(s) = fs::read_to_string(path) {
+                    if let Ok(Some(node)) = parse_signatures(&s) {
+                        let path_buf = path.to_path_buf();
+                        for (name, (_, line)) in
+                            build_sig_definition_locations(path_buf.clone(), &s, &node)
+                        {
+                            locations.insert(name, (path_buf.clone(), line));
+                        }
+                        roots.push(node);
+                    }
+                }
+            }
+        } else if path.is_dir() {
+            let (dir_roots, dir_locations) = load_signatures_from_dir_with_locations(path);
+            for (name, loc) in dir_locations {
+                locations.insert(name, loc);
+            }
+            roots.extend(dir_roots);
+        }
+    }
+    (roots, locations)
+}
+
 /// Load signature roots and a map from function/global name to (path, 0-based line) for link resolution.
 #[must_use]
 pub fn load_signatures_from_dir_with_locations(

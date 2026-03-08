@@ -1,12 +1,3 @@
-[workspace]
-members = [
-  ".",
-  "crates/leekscript-analysis",
-  "crates/leekscript-core",
-  "crates/leekscript-document",
-  "crates/leekscript-tooling",
-]
-
 [package]
 name = "leekscript-rs"
 version = "0.1.0"
