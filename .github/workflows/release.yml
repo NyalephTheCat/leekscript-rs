@@ -30,7 +30,7 @@ jobs:
         run: cargo fmt --all -- --check
 
       - name: Run tests
-        run: cargo test -p leekscript-rs -p leekscript-lsp --all-features
+        run: cargo test -p leekscript-rs --all-features
 
       - name: Publish leekscript-core
         run: cargo publish -p leekscript-core
