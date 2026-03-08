@@ -68,6 +68,18 @@ cargo run -p leekscript-rs --example validate_with_signatures script.leek
 cargo test -p leekscript-rs
 ```
 
+## Development
+
+From the **repository root** (so the workspace uses local sipha):
+
+```bash
+cargo fmt --all -- --check
+cargo clippy --workspace --all-features -- -D warnings
+cargo test --workspace --all-features
+```
+
+See the root [CONTRIBUTING.md](../../CONTRIBUTING.md) and [cursor.md](../../cursor.md) for conventions and workflow.
+
 ## Architecture
 
 See [ARCHITECTURE.md](ARCHITECTURE.md) for grammar phases (token stream → expression → program), the analysis pipeline (ScopeBuilder → Validator → TypeChecker → DeprecationChecker), and how `DocumentAnalysis` ties parsing, analysis, and definition map for LSP.
