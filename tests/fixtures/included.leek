@@ -1,0 +1,6 @@
+class Cell {
+    public integer id;
+    constructor(integer id) {
+        this.id = id;
+    }
+}

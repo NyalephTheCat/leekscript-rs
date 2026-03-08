@@ -6,7 +6,9 @@ use clap::Parser;
 
 fn main() {
     // Install graphical report handler so parse errors are pretty-printed with source snippets.
-    let _ = miette::set_hook(Box::new(|_| Box::new(miette::GraphicalReportHandler::new())));
+    let _ = miette::set_hook(Box::new(
+        |_| Box::new(miette::GraphicalReportHandler::new()),
+    ));
 
     let cli = cli::Cli::parse();
     let code = match cli.command {

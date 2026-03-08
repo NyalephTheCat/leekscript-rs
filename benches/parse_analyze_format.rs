@@ -82,9 +82,15 @@ fn bench_analyze(c: &mut Criterion) {
     let large_root = parse(LARGE).unwrap().expect("large");
 
     let mut g = c.benchmark_group("analyze");
-    g.bench_function("analyze_small", |b| b.iter(|| analyze(black_box(&small_root))));
-    g.bench_function("analyze_medium", |b| b.iter(|| analyze(black_box(&medium_root))));
-    g.bench_function("analyze_large", |b| b.iter(|| analyze(black_box(&large_root))));
+    g.bench_function("analyze_small", |b| {
+        b.iter(|| analyze(black_box(&small_root)))
+    });
+    g.bench_function("analyze_medium", |b| {
+        b.iter(|| analyze(black_box(&medium_root)))
+    });
+    g.bench_function("analyze_large", |b| {
+        b.iter(|| analyze(black_box(&large_root)))
+    });
     g.finish();
 }
 

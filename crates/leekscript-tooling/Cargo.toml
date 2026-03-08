@@ -1,0 +1,24 @@
+[package]
+name = "leekscript-tooling"
+version = "0.1.0"
+edition = "2021"
+description = "LeekScript tooling: formatter, visitor, tree display, transform"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/leek-wars/leekscript-rs"
+
+[features]
+default = []
+transform = ["sipha/transform"]
+
+[dependencies]
+leekscript-analysis = { path = "../leekscript-analysis" }
+leekscript-core = { path = "../leekscript-core" }
+sipha = { version = "2.0.0", features = ["miette", "emit"] }
+toml = "0.8"
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+all = "warn"
+pedantic = "warn"

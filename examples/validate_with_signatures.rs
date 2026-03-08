@@ -55,9 +55,15 @@ fn main() {
             }
         }
     } else {
-        println!("Validation failed ({} diagnostic(s)):", result.diagnostics.len());
+        println!(
+            "Validation failed ({} diagnostic(s)):",
+            result.diagnostics.len()
+        );
         for d in &result.diagnostics {
-            println!("  [{:?}] {} (span {}..{})", d.severity, d.message, d.span.start, d.span.end);
+            println!(
+                "  [{:?}] {} (span {}..{})",
+                d.severity, d.message, d.span.start, d.span.end
+            );
         }
         std::process::exit(1);
     }

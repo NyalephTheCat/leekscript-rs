@@ -1,0 +1,51 @@
+name: Release to crates.io
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+
+env:
+  CARGO_TERM_COLOR: always
+
+jobs:
+  release:
+    name: Publish to crates.io
+    runs-on: ubuntu-latest
+    environment: leekscript
+    permissions:
+      contents: read
+    env:
+      CARGO_REGISTRY_TOKEN: ${{ secrets.CARGO_REGISTRY_TOKEN }}
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+
+      - name: Install Rust
+        uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt
+
+      - name: Verify formatting
+        run: cargo fmt --all -- --check
+
+      - name: Run tests
+        run: cargo test -p leekscript-rs -p leekscript-lsp --all-features
+
+      - name: Publish leekscript-core
+        run: cargo publish -p leekscript-core
+
+      - name: Publish leekscript-analysis
+        run: cargo publish -p leekscript-analysis
+
+      - name: Publish leekscript-document
+        run: cargo publish -p leekscript-document
+
+      - name: Publish leekscript-tooling
+        run: cargo publish -p leekscript-tooling
+
+      - name: Publish leekscript-rs
+        run: cargo publish -p leekscript-rs
+
+      - name: Publish leekscript-lsp
+        run: cargo publish -p leekscript-lsp

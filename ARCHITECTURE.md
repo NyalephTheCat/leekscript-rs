@@ -1,39 +1,140 @@
 # Architecture
 
-## Grammar phases
+This document describes the layering and module boundaries of leekscript-rs, and where to add or change code for new features.
 
-Parsing is done in several phases, each with its own grammar and cached parse graph:
+## Layer overview
 
-1. **Phase 1 (token stream)** — Lexer: keywords, identifiers, numbers, strings, operators, brackets, comments. Entry: `parse_tokens()`.
-2. **Phase 2 (expression)** — Single expression only (e.g. for REPL or inline eval). Entry: `parse_expression()`.
-3. **Phase 3/4 (program)** — List of statements; top-level includes `include`, function declarations, class declarations. Root is a single `NodeRoot` with statement children. Entry: `parse()`.
+Dependencies flow **downward**: higher layers use lower layers; lower layers do not depend on higher ones.
 
-A separate **signature grammar** parses `.sig` files (function/global/class API only). Entry: `parse_signatures()`.
+```
+┌─────────────────────────────────────────────────────────────────┐
+│  LSP (lsp, utf16) — optional feature                            │
+├─────────────────────────────────────────────────────────────────┤
+│  Tooling (formatter, visitor, tree_display, transform)          │
+├─────────────────────────────────────────────────────────────────┤
+│  API / orchestration (document, doc_comment)                    │
+├─────────────────────────────────────────────────────────────────┤
+│  Analysis (analysis/*)                                          │
+├─────────────────────────────────────────────────────────────────┤
+│  Parse (grammar, parser, preprocess)                            │
+├─────────────────────────────────────────────────────────────────┤
+│  Core (syntax, types)                                           │
+└─────────────────────────────────────────────────────────────────┘
+```
 
-## Analysis pipeline
+### Core
 
-After parsing a program, semantic analysis runs in one pass over the tree with several visitors in sequence:
+- **`syntax`** — Token kinds, AST node kinds, keyword set, identifier validation. Shared by grammar and tooling.
+- **`types`** — Language type system (e.g. `Type`, `CastType`). Used by analysis and LSP.
 
-1. **ScopeBuilder** — Builds the scope store and scope ID sequence (for LSP: scope at offset).
-2. **Validator** — Resolves identifiers, checks break/continue in loops, duplicate declarations, placement of include/function/global.
-3. **TypeChecker** — Infers types, checks assignments and calls, records types in `type_map` (for hover/inlay hints).
-4. **DeprecationChecker** — Emits deprecation diagnostics (e.g. `===` / `!==`).
+No dependencies on other crate modules (only on `sipha` and std).
 
-All use the same `ScopeStore` and `scope_id_sequence`. Entry points: `analyze()`, `analyze_with_signatures()`, `analyze_with_include_tree()`.
+### Parse
 
-## Document analysis (LSP)
+- **`grammar`** — Grammar definition: expressions, statements, keywords, token stream, literals, signatures. Builds the grammar used by the parser.
+- **`parser`** — Parsing entry points: `parse`, `parse_to_doc`, `reparse`, `parse_expression`, etc. Produces syntax trees.
+- **`preprocess`** — Include handling: `build_include_tree`, `all_files`. Used by document/orchestration and CLI.
 
-`DocumentAnalysis` in `document.rs` is the single entry point for the language server: it runs parsing (with optional recovery), analysis (with optional include tree and signature roots), and builds:
+Parse layer depends on **Core** (`syntax`; `types` only if needed for signatures).
 
-- Diagnostics (parse + semantic)
-- Scope store and scope extents
-- Type map
-- Definition map (name + kind → path, span)
-- Doc comment map
-- Class hierarchy (super types)
+### Analysis
 
-So one call gives everything needed for diagnostics, go-to-definition, hover, completion, etc.
+- **`analysis`** — Scope building, validation, type checking, node helpers, builtins, signature loading. Produces `AnalysisResult`, `ScopeStore`, definition maps, etc.
 
-## Include preprocessing
+Depends on **Core** and **Parse**. No dependency on document, formatter, or LSP.
 
-`build_include_tree()` parses the main file, collects `include("...")` paths, resolves them relative to the file’s directory, and recursively loads and parses included files. Circular includes are detected and reported. No source expansion: each file keeps its own AST; analysis seeds scopes from included files so the main file can reference their symbols.
+### API / orchestration
+
+- **`document`** — Main entry point for “document-level” work: combines parsing, preprocessing, analysis, definition map, and (when used by LSP) drives semantic tokens and diagnostics. Exposes `DocumentAnalysis`.
+- **`doc_comment`** — Doxygen-style doc comment parsing and doc maps. Used by document and can be used by LSP (e.g. hover).
+
+Depends on **Core**, **Parse**, and **Analysis**.
+
+### Tooling
+
+- **`formatter`** — Code formatting.
+- **`visitor`** — Tree walking utilities.
+- **`tree_display`** — Pretty-printing of syntax trees.
+- **`transform`** (optional feature) — Source-to-source transforms.
+
+Depends on **Core** and **Parse** (formatter/document may also tie into **Analysis** for style decisions if needed).
+
+### LSP
+
+- **`lsp`** — LSP-specific logic: semantic tokens, content changes, diagnostics conversion. Uses `DocumentAnalysis`, `ScopeStore`, and analysis types.
+- **`utf16`** (optional, with `utf16` feature) — UTF-16 offset/range conversions for LSP and editors.
+
+Depends on **Core**, **Parse**, **Analysis**, and **API** (`document`). No dependency on formatter or CLI.
+
+---
+
+## Where to add or change things
+
+| Goal | Where to work |
+|------|----------------|
+| **New token or AST node kind** | `syntax` (and possibly grammar keywords). |
+| **New language type** | `types`. |
+| **New expression or statement syntax** | `grammar` (expressions, statements, keywords, etc.), then `parser` if new entry points are needed. |
+| **New keyword or literal** | `grammar` (keywords, literals) and `syntax` if it affects kinds. |
+| **Scope or name resolution rules** | `analysis`: scope, scope_builder, node_helpers. |
+| **New validation or diagnostic** | `analysis`: validator, and possibly type_checker or node_helpers. |
+| **Type inference / type checking** | `analysis`: type_checker, types, node_helpers. |
+| **Single “document” entry (e.g. for LSP)** | `document`: add or extend `DocumentAnalysis` (and options). |
+| **Doc comments / Doxygen** | `doc_comment`. |
+| **Formatting rules** | `formatter`. |
+| **Semantic highlighting** | `lsp/semantic_tokens`. |
+| **New LSP feature (hover, goto def, completion, rename)** | New module under `lsp/` (e.g. `lsp/hover.rs`), using `DocumentAnalysis`, `ScopeStore`, and existing helpers. Keep LSP-specific types and conversions inside `lsp/`. |
+| **Content changes / incremental updates** | `lsp/content_changes` and `parser` (reparse, apply_content_changes). |
+| **CLI behavior** | `cli` (and the `main` binary). |
+| **Include expansion (alternative)** | See [Include handling: preprocess vs transform](#include-handling-preprocess-vs-transform) — could be implemented as a transform. |
+
+---
+
+## Include handling: preprocess vs transform
+
+**Current (preprocess):** The `preprocess` module builds an **include tree**: parse the main file, collect `include("path")` from the AST, load and parse each included file (with circular-include detection), and return a tree of (path, source, root, includes). No source expansion: each file keeps its own AST. Analysis then **seeds scope** from included files and analyzes the main file; the main AST still contains `NodeInclude` nodes.
+
+**Alternative (include-as-transform):** Includes could be handled as a **transformation** after parsing:
+
+1. **Parse** the main file.
+2. **Parse all included files** — same as today: resolve paths, load files, parse, repeat until no new includes; detect circular includes and fail.
+3. **Link / transform** — replace each `include("path")` node in the main program with the **top-level statements** of the included file’s program root (splice the included program’s statement list in place of the include node). Result: a **single merged AST** (one program node whose statement list is main + inlined includes in order).
+4. **Validation** — run scope, type-check, and validation on this single tree. No separate “seed scope from includes”; included declarations are just part of the tree.
+
+**Benefits of the transform approach:** One tree to analyze; no special include-tree handling in analysis or document; same mental model as “include = paste statements here.”
+
+**Considerations:** Source mapping for diagnostics and LSP (e.g. “error in `lib.leek` line 5”) would need either (a) per-node file/path metadata on the merged tree, or (b) a combined line map (path + line for each span). The existing `IncludeTree` could still be built for path/source lookup and then the transform applied to produce the merged AST for analysis.
+
+Implementing this would mean: adding a transform (e.g. under `transform` or a dedicated `include_expand`) that takes the main root + a map path→(root, source), walks the main program, and replaces each `NodeInclude` with the children of the included program node; then either switching analysis to use that merged root (and optional file metadata) or keeping both paths behind an option.
+
+---
+
+## Error handling and results
+
+- **Parser:** Returns `Result`. Fail-fast for parse errors; diagnostics can be converted via `parse_error_to_diagnostics` / `parse_error_to_miette`.
+- **Analysis:** Returns `AnalysisResult` with `Vec<SemanticDiagnostic>`. Collects all diagnostics; does not fail-fast. This split (parse = fail-fast, analysis = collect all) is intentional and should be preserved when adding new checks.
+
+---
+
+## Crate layout (current)
+
+The codebase is split into internal crates under `leekscript-rs/crates/`, with the main `leekscript-rs` crate re-exporting everything so the public API is unchanged:
+
+- **`leekscript-core`** — `syntax`, `types`, `grammar`, `parser`, `preprocess`, `doc_comment`. Parsing and include handling.
+- **`leekscript-analysis`** — `analysis/*`. Scope, validation, type checking.
+- **`leekscript-document`** — document-level API: `DocumentAnalysis`, definition map, doc maps, `build_class_super`.
+- **`leekscript-tooling`** — `formatter`, `visitor`, `tree_display`, optional `transform` (feature-gated).
+- **`leekscript-rs`** (main) — Re-exports the above; also contains `lsp/`, `utf16`, and the CLI binary. No duplicate modules; consumers still depend only on `leekscript-rs`.
+
+All crates live in the same repo. The workspace is defined at the repo root (`parsing/Cargo.toml`); `leekscript-rs` depends on the four internal crates and exposes a single, backward-compatible API.
+
+---
+
+## Naming conventions
+
+- **Parsing:** `parse_*` for parsing entry points.
+- **Building structures:** `build_*` (e.g. scope, definition map, include tree, grammar).
+- **Analysis:** `analyze*` for analysis entry points.
+- **Grammar:** `add_*` for adding rules in the grammar.
+
+These are not enforced by tooling but are used consistently in the codebase.

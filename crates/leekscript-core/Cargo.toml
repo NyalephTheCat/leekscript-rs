@@ -1,0 +1,21 @@
+[package]
+name = "leekscript-core"
+version = "0.1.0"
+edition = "2021"
+description = "LeekScript parser core: syntax, grammar, parser, preprocess, doc comments"
+license = "MIT OR Apache-2.0"
+repository = "https://github.com/leek-wars/leekscript-rs"
+
+[dependencies]
+miette = "7"
+sipha = { version = "2.0.0", features = ["miette", "emit"] }
+
+[dev-dependencies]
+sipha-diff = "2.0.0"
+
+[lints.rust]
+unsafe_code = "forbid"
+
+[lints.clippy]
+all = "warn"
+pedantic = "warn"

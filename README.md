@@ -1,6 +1,8 @@
 # leekscript-rs
 
-A [LeekScript](https://leekscript.com) parser implemented in Rust using [sipha](../sipha) (PEG parser with green/red syntax trees, in this repository).
+[![Release to crates.io](https://github.com/leek-wars/leekscript-rs/actions/workflows/release.yml/badge.svg)](https://github.com/leek-wars/leekscript-rs/actions/workflows/release.yml)
+
+A [LeekScript](https://leekscript.com) parser implemented in Rust using [sipha](https://crates.io/crates/sipha) 2.0 (PEG parser with green/red syntax trees).
 
 ## Status
 

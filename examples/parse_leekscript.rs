@@ -9,13 +9,15 @@ use std::fs;
 use std::path::{Path, PathBuf};
 
 use leekscript_rs::{
-    parse, parse_expression, parse_error_to_miette, parse_recovering, print_syntax_tree,
+    parse, parse_error_to_miette, parse_expression, parse_recovering, print_syntax_tree,
     TreeDisplayOptions,
 };
 
 fn main() {
     // Use miette's graphical handler so parse errors show source snippets and spans.
-    let _ = miette::set_hook(Box::new(|_| Box::new(miette::GraphicalReportHandler::new())));
+    let _ = miette::set_hook(Box::new(
+        |_| Box::new(miette::GraphicalReportHandler::new()),
+    ));
 
     let manifest_dir = Path::new(env!("CARGO_MANIFEST_DIR"));
     let leekscript_dir = manifest_dir.join("examples").join("leekscript");
@@ -23,17 +25,18 @@ fn main() {
     let invalid_dir = leekscript_dir.join("invalid");
 
     println!("═══ LeekScript parser examples ═══\n");
-    println!("Valid: {}  |  Invalid: {}\n", valid_dir.display(), invalid_dir.display());
+    println!(
+        "Valid: {}  |  Invalid: {}\n",
+        valid_dir.display(),
+        invalid_dir.display()
+    );
 
     // ─── Discover program snippets (all .leek in leekscript/valid/) ───────────
     let program_files = discover_leek_files(&valid_dir);
     let tree_display_file = program_files.first().cloned(); // show tree for first file
 
     for path in &program_files {
-        let name = path
-            .file_stem()
-            .and_then(|s| s.to_str())
-            .unwrap_or("?");
+        let name = path.file_stem().and_then(|s| s.to_str()).unwrap_or("?");
         let show_tree = tree_display_file.as_ref() == Some(path);
         match fs::read_to_string(path) {
             Ok(source) => print_snippet(name, &source, path, show_tree),
@@ -55,9 +58,7 @@ fn main() {
                         Ok(Some(_)) => println!("  {}  → OK", name),
                         Ok(None) => println!("  {}  → (empty)", name),
                         Err(e) => {
-                            if let Some(report) =
-                                parse_error_to_miette(&e, source, name.as_ref())
-                            {
+                            if let Some(report) = parse_error_to_miette(&e, source, name.as_ref()) {
                                 eprintln!("  {}  → Error:\n{:?}", name, report);
                             } else {
                                 println!("  {}  → Error: {}", name, e);
@@ -87,9 +88,7 @@ fn main() {
                 Ok(Some(_)) => println!("  parse() succeeded (unexpected)"),
                 Ok(None) => println!("  parse() returned None"),
                 Err(e) => {
-                    if let Some(report) =
-                        parse_error_to_miette(&e, &source, short_name)
-                    {
+                    if let Some(report) = parse_error_to_miette(&e, &source, short_name) {
                         eprintln!("{:?}\n", report);
                     } else {
                         println!("  Error: {}", e);
@@ -121,9 +120,7 @@ fn discover_leek_files(dir: &Path) -> Vec<PathBuf> {
     };
     let mut paths: Vec<PathBuf> = rd
         .filter_map(|e| e.ok().map(|e| e.path()))
-        .filter(|p| {
-            p.is_file() && p.extension().map_or(false, |ext| ext == "leek")
-        })
+        .filter(|p| p.is_file() && p.extension().map_or(false, |ext| ext == "leek"))
         .collect();
     paths.sort_by_cached_key(|p| p.file_name().unwrap_or_default().to_owned());
     paths
