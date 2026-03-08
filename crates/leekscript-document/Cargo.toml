@@ -14,7 +14,3 @@ sipha-analysis = "2.0.0"
 
 [lints.rust]
 unsafe_code = "forbid"
-
-[lints.clippy]
-all = "warn"
-pedantic = "warn"

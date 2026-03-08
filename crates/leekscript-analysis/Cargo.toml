@@ -16,7 +16,3 @@ unsafe_code = "forbid"
 
 [dev-dependencies]
 leekscript-document = { path = "../leekscript-document" }
-
-[lints.clippy]
-all = "warn"
-pedantic = "warn"
